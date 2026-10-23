@@ -29,11 +29,10 @@
 
 \newcommand{\col}[1]{\texttt{#1}}
 
-\title{PCS5916 -- Computação de Alto Desempenho e Aplicações\\[4pt]
-\large Exercícios Aula 05 -- Apache Spark\\
+\title{PCS5916 - Computação de Alto Desempenho e Aplicações\\[4pt]
+\large Exercícios Aula 05 - Apache Spark\\
 Food Establishment Inspection Data (King County)}
-\author{Andre Moreno Goveia}
-\date{22 de outubro de 2026}
+\author{Andre Moreno Goveia - 13682785}
 
 \begin{document}
 \maketitle
@@ -99,7 +98,7 @@ Inspection\_Serial\_Num & \col{inspection\_serial\_num} / string & 0 & 0,0 \\
 \end{tabular}
 \end{table}
 
-Os 41.011 nulos em \col{violation\_type} e \col{violation\_description} não são falhas de coleta: são as inspeções sem infração. A distribuição de \col{violation\_type} é RED = 34.244, BLUE = 34.813 e nulo = 41.011; a de \col{inspection\_result} é Satisfactory = 53.790, Unsatisfactory = 53.499 e Complete = 2.779. A coluna \col{city} tem 9 nulos e grafias inconsistentes (por exemplo, \textit{Auburn}/\textit{AUBURN} e o erro de digitação \textit{BELLEUE}).
+Os 41.011 nulos em \col{violation\_type} e \col{violation\_description} são as inspeções sem infração. A distribuição de \col{violation\_type} é RED = 34.244, BLUE = 34.813 e nulo = 41.011; a de \col{inspection\_result} é Satisfactory = 53.790, Unsatisfactory = 53.499 e Complete = 2.779. A coluna \col{city} tem 9 nulos e grafias inconsistentes (por exemplo, \textit{Auburn}/\textit{AUBURN} e o erro de digitação \textit{BELLEUE}).
 
 \subsection*{Alterações no código em relação ao laboratório}
 
@@ -364,13 +363,5 @@ Foi examinada na Spark UI a consulta da questão 4 executada pelo \col{by\_year.
 \end{figure}
 
 \paragraph{Como o processamento foi distribuído.} O driver converteu a consulta SQL em um plano físico, dividiu-o em stages nos pontos de shuffle (\col{Exchange}) e enviou ao YARN uma task por partição. As tasks de cada stage rodaram em paralelo nos 2 núcleos do executor, e o shuffle redistribuiu os resultados parciais pela chave de agrupamento entre um stage e outro. Embora o cluster tenha 2 nós \textit{core}, apenas um executor foi alocado: o volume de dados é pequeno (2 partições de entrada) e as tasks duram dezenas de milissegundos, de modo que a alocação dinâmica do EMR não chegou a solicitar um segundo executor. Por isso o paralelismo efetivo foi de 2 tasks simultâneas e todo o shuffle foi local. Com um conjunto de dados maior, haveria mais partições, mais tasks pendentes e mais executores alocados, espalhando o processamento pelos dois nós e tornando o shuffle efetivamente transmitido pela rede.
-
-% ---------------------------------------------------------------
-\section*{Observações}
-\begin{itemize}
-  \item Os gráficos das questões 3 e 4 foram regenerados localmente com os valores obtidos no cluster (tabelas acima), pois o Livy substitui caracteres acentuados no código enviado e os títulos ficaram com ``??'' no notebook. Os dados são idênticos.
-  \item O ano de 2026 contém dados apenas até 21/10/2026.
-  \item Entrega: notebook \col{restaurants\_spark\_after\_run.ipynb} (código e resultados) e este relatório.
-\end{itemize}
 
 \end{document}
