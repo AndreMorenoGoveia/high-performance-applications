@@ -1,0 +1,70 @@
+% =============================================================================
+% sbc-template.sty - Standard SBC (Sociedade Brasileira de Computacao) Style
+% Compatible with SSCAD / WPerformance 12-page paper format (A4, 12pt)
+% =============================================================================
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{sbc-template}[2024/01/01 SBC Conference Style]
+
+\RequirePackage[a4paper,top=3.5cm,left=3.0cm,right=3.0cm,bottom=2.5cm]{geometry}
+\RequirePackage{times}
+
+\setlength{\parindent}{1.27cm}
+\setlength{\parskip}{6pt}
+
+\newcommand{\address}[1]{\gdef\@address{#1}}
+\def\@address{}
+\newcommand{\email}[1]{\texttt{#1}}
+\newcommand{\inst}[1]{\textsuperscript{#1}}
+
+\renewcommand{\maketitle}{%
+  \begin{center}%
+    {\fontsize{16}{19}\selectfont\bfseries \@title \par}%
+    \vspace{12pt}%
+    {\fontsize{12}{14}\selectfont\bfseries \@author \par}%
+    \vspace{6pt}%
+    {\fontsize{10}{12}\selectfont \@address \par}%
+    \vspace{12pt}%
+  \end{center}%
+}
+
+\renewenvironment{abstract}{%
+  \begin{list}{}{%
+    \setlength{\leftmargin}{0.8cm}%
+    \setlength{\rightmargin}{0.8cm}%
+    \setlength{\topsep}{0pt}%
+  }%
+  \item\relax
+  \textbf{Abstract.} \itshape
+}{%
+  \end{list}\vspace{6pt}%
+}
+
+\newenvironment{resumo}{%
+  \begin{list}{}{%
+    \setlength{\leftmargin}{0.8cm}%
+    \setlength{\rightmargin}{0.8cm}%
+    \setlength{\topsep}{0pt}%
+  }%
+  \item\relax
+  \textbf{Resumo.} \itshape
+}{%
+  \end{list}\vspace{10pt}%
+}
+
+\renewcommand\section{\@startsection{section}{1}{\z@}%
+  {-10pt \@plus -2pt \@minus -2pt}%
+  {4pt}%
+  {\normalfont\fontsize{13}{15}\selectfont\bfseries}}
+
+\renewcommand\subsection{\@startsection{subsection}{2}{\z@}%
+  {-8pt \@plus -2pt \@minus -2pt}%
+  {3pt}%
+  {\normalfont\fontsize{12}{14}\selectfont\bfseries}}
+
+\renewcommand\subsubsection{\@startsection{subsubsection}{3}{\z@}%
+  {-6pt \@plus -2pt \@minus -2pt}%
+  {2pt}%
+  {\normalfont\fontsize{11}{13}\selectfont\bfseries\itshape}}
+
+\pagestyle{empty}
+\endinput

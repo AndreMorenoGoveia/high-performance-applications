@@ -1,0 +1,307 @@
+\documentclass[12pt]{article}
+\usepackage{sbc-template}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil,english]{babel}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{./figures/}}
+
+\title{BitMamba-CV: Co-Design Hardware-Algoritmo de Modelos de Espa\c{c}o de Estados Mamba-2 Tern\'{a}rios (1,58-bit) com Discretiza\c{c}\~{a}o CPoT em FPGA de Borda}
+
+\author{Andr\'{e} (Autor Principal)\inst{1}}
+
+\address{Departamento de Ci\^{e}ncia da Computa\c{c}\~{a}o -- Aplica\c{c}\~{o}es de Alto Desempenho\\
+  \email{andre@instituicao.edu.br}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Deploying sequence models on resource-constrained edge FPGAs faces a dual bottleneck: Transformers suffer from $O(L)$ KV-cache growth that overflows on-chip BRAM, while recent FPGA accelerators for Selective State Space Models (Mamba) rely on 4-bit or 8-bit multipliers that exhaust scarce DSP blocks. Conversely, recent $1.58$-bit ternary accelerators target only Transformers. This paper presents \textbf{BitMamba-CV}, a hardware-algorithm co-design for $1.58$-bit ternary Mamba-2 models on an Intel Cyclone~V SoC FPGA. First, to prevent post-training Hadamard rotations from destroying ternary weights, we integrate a multiplier-free 16-point Fast Walsh-Hadamard Transform (FWHT) directly inside the Quantization-Aware Training (QAT) graph (\texttt{H-BitLinear}). Second, we identify that standard Power-of-Two (PoT, $2^{-k}$) quantization of the recurrent decay $\bar{A}_t$ collapses long-range memory channels where $\bar{A}_t \to 1^-$, and propose a multiplier-free \textbf{Complementary Power-of-Two (CPoT, $\{2^{-k}, 1-2^{-k}\}$)} discretization that boosts long-memory eigenvalue SQNR from $6.48\text{ dB}$ to $36.49\text{ dB}$ ($51.72\text{ dB}$ in dual-shift CPoT-2) and preserves $>99.5\%$ recall up to $L=16{,}384$. Third, we conduct a fair same-chip Design Space Exploration on the Intel Cyclone~V comparing Carry-Chain Adder Trees, Table-Lookup (\texttt{TLMM}), and Structured Zero-Skipping ($\sim 39\%$ zero weights) with Radix-3 ($1.60\text{ bits/weight}$) M10K packing against an on-chip INT8-DSP Mamba-2 baseline, accompanied by an honest dual-regime Roofline analysis.
+\end{abstract}
+
+\selectlanguage{brazil}
+\begin{resumo}
+A implanta\c{c}\~{a}o de modelos de sequ\^{e}ncia em FPGAs de borda enfrenta um duplo gargalo: Transformers sofrem com o crescimento linear $O(L)$ do KV-Cache que esgota a mem\'{o}ria BRAM \emph{on-chip}, enquanto aceleradores recentes em FPGA para Modelos de Espa\c{c}o de Estados Seletivos (Mamba) dependem de multiplicadores de 4 ou 8 bits que saturam os blocos DSP. Por outro lado, aceleradores tern\'{a}rios de $1{,}58\text{ bits}$ existentes restringem-se a arquiteturas Transformer. Este artigo apresenta o \textbf{BitMamba-CV}, um co-design hardware-algoritmo para modelos Mamba-2 tern\'{a}rios ($1{,}58\text{ bits}$) no FPGA Intel Cyclone~V SoC. Primeiro, para evitar que a rota\c{c}\~{a}o de Hadamard p\'{o}s-treinamento destrua a natureza tern\'{a}ria dos pesos, integramos uma Transformada R\'{a}pida de Walsh-Hadamard (FWHT) de 16 pontos sem multiplicadores diretamente no grafo de treinamento QAT (\texttt{H-BitLinear}). Segundo, demonstramos que a quantiza\c{c}\~{a}o em Pot\^{e}ncia de Dois convencional ($\text{PoT}, 2^{-k}$) do fator de decaimento $\bar{A}_t$ apaga canais de mem\'{o}ria longa onde $\bar{A}_t \to 1^-$, e propomos a discretiza\c{c}\~{a}o \textbf{Complementary Power-of-Two ($\text{CPoT}, \{2^{-k}, 1-2^{-k}\}$)}, que eleva o SQNR de autovalores lentos de $6{,}48\text{ dB}$ para $36{,}49\text{ dB}$ ($51{,}72\text{ dB}$ em CPoT-2) e preserva $>99{,}5\%$ de reten\c{c}\~{a}o at\'{e} $L=16.384$. Terceiro, realizamos uma explora\c{c}\~{a}o justa no mesmo chip Cyclone~V comparando \'{A}rvore Somadora em ALMs, Busca em Tabela (\texttt{TLMM}) e \emph{Zero-Skipping} ($\sim 39\%$ de pesos nulos) com empacotamento Radix-3 ($1{,}60\text{ bits/peso}$) frente a um baseline Mamba-2 INT8 baseado em DSPs, acompanhada de uma modelagem \emph{Roofline} em dois regimes de mem\'{o}ria.
+\end{resumo}
+
+\section{Introdu\c{c}\~{a}o}
+
+A infer\^{e}ncia eficiente de modelos profundos de sequ\^{e}ncia em dispositivos de borda com restri\c{c}\~{o}es severas de pot\^{e}ncia ($\le 5\text{ W}$) e mem\'{o}ria \emph{on-chip} representa um dos desafios centrais em Arquitetura de Computadores e Computa\c{c}\~{a}o de Alto Desempenho \cite{wei2025lightmamba,qiao2025tellme}. Embora modelos baseados na arquitetura Transformer dominem o processamento de linguagem natural e sinais temporais, seu mecanismo de autoaten\c{c}\~{a}o apresenta complexidade computacional quadr\'{a}tica $O(L^2)$ na fase de \emph{prefill} e exige o armazenamento de um cache de chaves e valores (\emph{KV-Cache}) que cresce linearmente $O(L)$ com o comprimento da sequ\^{e}ncia $L$. Em FPGAs de baixo custo e baixa pot\^{e}ncia --- como a fam\'{\i}lia Intel Cyclone~V (28\,nm), amplamente empregada em instrumenta\c{c}\~{a}o embarcada e sistemas ciberf\'{\i}sicos, dispondo de cerca de $553\text{ KB}$ de mem\'{o}ria SRAM distribu\'{\i}da em blocos M10K e desprovida de mem\'{o}ria HBM \cite{intel_cyclone5_handbook} --- o crescimento do KV-Cache rapidamente transborda a mem\'{o}ria \emph{on-chip}, for\c{c}ando tr\'{a}fego cont\'{\i}nuo na interface DDR3 externa.
+
+Os Modelos de Espa\c{c}o de Estados Seletivos (\emph{Selective State Space Models} --- Mamba-1 \cite{gu2024mamba} e Mamba-2 \cite{dao2024transformers}) contornam essa barreira estrutural substituindo a aten\c{c}\~{a}o quadr\'{a}tica por uma recorr\^{e}ncia linear seletiva cujo estado oculto $h_t$ possui dimens\~{a}o estritamente constante $O(1)$, independentemente de $L$. Contudo, mapear blocos Mamba em FPGAs de borda esbarra em tr\^{e}s obst\'{a}culos microarquiteturais: (i) \textbf{domin\^{a}ncia das proje\c{c}\~{o}es lineares}: cerca de $92\%$ dos par\^{a}metros e $86\%$ das opera\c{c}\~{o}es de multiplica\c{c}\~{a}o-acumula\c{c}\~{a}o (MAC) residem nas camadas densas (\texttt{in\_proj} e \texttt{out\_proj}), saturando rapidamente os escassos blocos DSP quando executadas em INT8 ou INT4; (ii) \textbf{\emph{outliers} severos de ativa\c{c}\~{a}o}: canais de ativa\c{c}\~{a}o com amplitude discrepante degradam drasticamente a quantiza\c{c}\~{a}o de baixa precis\~{a}o \cite{chiang2025quamba}; e (iii) \textbf{sensibilidade num\'{e}rica da recorr\^{e}ncia seletiva}: o fator de decaimento temporal $\bar{A}_t = \exp(-\Delta_t A)$ opera muito pr\'{o}ximo da unidade ($\bar{A}_t \in [0{,}90,\,0{,}999]$) para reter dependências de longo alcance, sofrendo colapso de mem\'{o}ria quando submetido a quantiza\c{c}\~{o}es grosseiras.
+
+Na literatura recente (2024--2026), duas vertentes de aceleradores em FPGA evolu\'{\i}ram de maneira desconectada. De um lado, aceleradores dedicados ao Mamba --- como \emph{MARCA} \cite{li2024marca}, \emph{LightMamba} \cite{wei2025lightmamba} e \emph{FastMamba} \cite{fastmamba2025} --- mant\^{e}m pesos em 4 ou 8 bits (W4A4/W8A8), dependendo fortemente de blocos DSP para as proje\c{c}\~{o}es lineares e visando FPGAs de grande porte (como AMD Alveo U280 e Versal VCK190). De outro lado, aceleradores para pesos tern\'{a}rios de $1{,}58\text{ bits}$ ($\tilde{W} \in \{-1, 0, +1\}$ \cite{ma2024era}) --- como \emph{TerEffic} \cite{yin2025tereffic} e \emph{TeLLMe} \cite{qiao2025tellme} --- substituem multiplicadores por somadores em LUTs, mas aplicam essa t\'{e}cnica exclusivamente a Transformers, permanecendo limitados pelo KV-Cache $O(L)$. Embora trabalhos algor\'{\i}tmicos recentes como \emph{Bi-Mamba} \cite{tang2024bimamba}, \emph{Slender-Mamba} \cite{yu2025slendermamba} e \emph{Ternary Mamba} \cite{ganesaraja2026ternarymamba} tenham demonstrado a viabilidade de modelos Mamba de 1 e $1{,}58\text{ bits}$ em GPUs, nenhum trabalho anterior realizou o co-design de hardware em FPGA unindo proje\c{c}\~{o}es tern\'{a}rias no dom\'{\i}nio de Hadamard ao caminho recorrente $O(1)$ do Mamba-2.
+
+Neste trabalho, propomos o \textbf{BitMamba-CV}, cujas contribui\c{c}\~{o}es s\~{a}o:
+\begin{enumerate}
+  \item \textbf{Co-Design QAT \texttt{H-BitLinear} para Mamba-2 sem Quebra da Ternaridade:} Demonstramos que absorver a Transformada de Walsh-Hadamard (FWHT) nos pesos p\'{o}s-treinamento ($\mathbf{W}\mathbf{H}^T$, como feito em \emph{Quamba} \cite{chiang2025quamba}) destr\'{o}i a estrutura tern\'{a}ria $\{-1,0,+1\}$. Solucionamos esse conflito inserindo um pipeline FWHT de 16 pontos sem multiplicadores diretamente no grafo de \emph{Quantization-Aware Training} (QAT) antes da quantiza\c{c}\~{a}o, preservando pesos $100\%$ tern\'{a}rios empacotados em Radix-3 ($1{,}60\text{ bits/peso}$) nas mem\'{o}rias M10K.
+  \item \textbf{Discretiza\c{c}\~{a}o \emph{Complementary Power-of-Two} (CPoT) para Mem\'{o}ria Longa:} Identificamos matematicamente que a quantiza\c{c}\~{a}o PoT convencional ($\bar{A}_t = 2^{-k}$, adotada em \emph{LightMamba} e \emph{FastMamba}) restringe o maior n\'{\i}vel sub-unit\'{a}rio a $0{,}5$, apagando o estado recorrente em poucos passos. Propomos a discretiza\c{c}\~{a}o bimodal $\text{CPoT} \in \{2^{-k}\} \cup \{1 - 2^{-k}\}$, que utiliza apenas deslocamento e subtra\c{c}\~{a}o ($h_{t-1} - (h_{t-1} \gg k)$) e eleva o SQNR na regi\~{a}o $[0{,}90,\,0{,}999]$ de $6{,}48\text{ dB}$ para $36{,}49\text{ dB}$ ($51{,}72\text{ dB}$ na variante de duplo shift CPoT-2).
+  \item \textbf{Explora\c{c}\~{a}o Microarquitetural Justa no Mesmo Chip (Intel Cyclone~V):} Desalojamos as proje\c{c}\~{o}es lineares ($85{,}8\%$ das opera\c{c}\~{o}es) para os ALMs de 6 entradas da Cyclone~V e dedicamos os blocos DSP de precis\~{a}o vari\'{a}vel exclusivamente aos produtos din\^{a}micos do SSM ($\bar{B}_t x_t$, $C_t h_t$, \texttt{Conv1D} e interpola\c{c}\~{a}o PWL de \texttt{SiLU}). Avaliamos \'{A}rvore Somadora, \emph{Table-Lookup} (\texttt{TLMM}) e \emph{Zero-Skipping} ($\sim 39\%$ de pesos zero) contra um baseline Mamba-2 W8A8 baseado em DSPs no mesmo FPGA.
+  \item \textbf{Modelagem \emph{Roofline} Dual-Regime e Estudo Completo de Abla\c{c}\~{a}o:} Apresentamos um estudo de abla\c{c}\~{a}o de 8 est\'{a}gios (3 \emph{seeds}) e uma an\'{a}lise \emph{Roofline} transparente que distingue o regime \emph{Compute-Bound} (modelos compactos $100\%$ residentes nas M10K) do regime \emph{Memory-Bandwidth-Bound} (modelos maiores lidos da DDR3 em \emph{batch}=1, onde o empacotamento Radix-3 garante $5{,}0\times$ e $1{,}25\times$ de \emph{speedup} direto sobre INT8 e 2-bit).
+\end{enumerate}
+
+\section{Fundamenta\c{c}\~{a}o Te\'{o}rica e An\'{a}lise Matem\'{a}tica de Gargalos}
+
+\subsection{Arquitetura Mamba-2 (Structured State Space Duality -- SSD)}
+Diferentemente do Mamba-1 \cite{gu2024mamba}, que parametriza a matriz de transi\c{c}\~{a}o diagonal $\mathbf{A} \in \mathbb{R}^{D_{\text{inner}} \times N}$ de forma independente para cada canal e dimens\~{a}o de estado, o Mamba-2 \cite{dao2024transformers} estrutura o espa\c{c}o de estados em $H$ cabe\c{c}as de dimens\~{a}o $P_{\text{head}} = D_{\text{inner}}/H$ e restringe a taxa de decaimento $A_h > 0$ a um \textbf{escalar por cabe\c{c}a} $h \in \{1,\dots,H\}$. Para o passo de tempo $t$, ap\'{o}s a proje\c{c}\~{a}o de entrada $\mathbf{u}_t \mapsto [\mathbf{z}_t, \mathbf{x}_t, \mathbf{B}_t, \mathbf{C}_t, \boldsymbol{\Delta}_t]$ e a convolu\c{c}\~{a}o causal curta \texttt{Conv1D} ($k=4$) seguida de $\text{SiLU}(x) = x\sigma(x)$, a din\^{a}mica recorrente da cabe\c{c}a $h$ \'{e} dada por:
+\begin{equation}
+  \bar{A}_t^{(h)} = \exp\!\left(-\Delta_t^{(h)} A_h\right) \in (0, 1), \qquad
+  \mathbf{h}_t^{(h)} = \bar{A}_t^{(h)} \mathbf{h}_{t-1}^{(h)} + \Delta_t^{(h)} \left(\mathbf{x}_t^{(h)} \otimes \mathbf{B}_t^{(h)}\right),
+  \label{eq:mamba2_ssd}
+\end{equation}
+\begin{equation}
+  \mathbf{y}_t^{(h)} = \mathbf{h}_t^{(h)} \mathbf{C}_t^{(h)} + D_h \mathbf{x}_t^{(h)}, \qquad
+  \mathbf{o}_t = \mathbf{W}_{\text{out}} \big(\mathbf{y}_t \odot \text{SiLU}(\mathbf{z}_t)\big).
+  \label{eq:mamba2_out}
+\end{equation}
+Do ponto de vista de hardware, a escolha do Mamba-2 \'{e} decisiva: como $\bar{A}_t^{(h)}$ \'{e} escalar por cabe\c{c}a, o c\'{a}lculo n\~{a}o-linear da exponencial $\exp(-\Delta_t^{(h)} A_h)$ reduz-se de $D_{\text{inner}} \times N$ avalia\c{c}\~{o}es por token para apenas $H$ avalia\c{c}\~{o}es (ex.: $H=8$ contra $256 \times 16 = 4.096$ no Mamba-1).
+
+\subsection{O Conflito entre FWHT e Pesos Tern\'{a}rios (E Como o \texttt{H-BitLinear} o Resolve)}
+Em quantiza\c{c}\~{a}o p\'{o}s-treinamento (PTQ) de modelos Mamba, como no \emph{Quamba} \cite{chiang2025quamba}, suprimem-se \emph{outliers} de ativa\c{c}\~{a}o inserindo uma matriz de Hadamard ortogonal $\mathbf{H}$ ($\mathbf{H}^T\mathbf{H} = \mathbf{I}$) na camada linear: $\mathbf{y} = \mathbf{W}\mathbf{x} = (\mathbf{W}\mathbf{H}^T)(\mathbf{H}\mathbf{x})$. Contudo, se $\mathbf{W}$ foi previamente quantizada para valores tern\'{a}rios $\tilde{\mathbf{W}} \in \{-1, 0, +1\}^{M \times K}$, o produto $\mathbf{W}' = \tilde{\mathbf{W}}\mathbf{H}^T$ produz combina\c{c}\~{o}es lineares de $B$ trits, gerando dezenas de n\'{\i}veis distintos e \textbf{destruindo a propriedade tern\'{a}ria dos pesos}.
+
+Para resolver essa inconsist\^{e}ncia matem\'{a}tica sem adicionar multiplicadores em hardware, adotamos o paradigma \texttt{H-BitLinear} \cite{wang2025bitnetv2} durante o treinamento ciente de quantiza\c{c}\~{a}o (QAT): aplicamos a Transformada R\'{a}pida de Walsh-Hadamard em blocos de tamanho $B=16$ ($\mathbf{H}_{16}$) diretamente sobre a ativa\c{c}\~{a}o normalizada \textbf{dentro do grafo de \emph{forward pass}} antes da quantiza\c{c}\~{a}o sim\'{e}trica INT8 por token e da proje\c{c}\~{a}o tern\'{a}ria via \emph{Straight-Through Estimator} (STE):
+\begin{equation}
+  \tilde{\mathbf{x}} = \text{Quant}_{\text{INT8}}\!\left(2^{-2}\,\mathbf{H}_{16}\,\text{RMSNorm}(\mathbf{x})\right), \quad
+  \tilde{\mathbf{W}} = \text{RoundClip}\!\left(\frac{\mathbf{W}}{\gamma_W}, -1, +1\right), \quad \gamma_W = \frac{1}{MK}\sum_{i,j}|W_{ij}|.
+  \label{eq:hbitlinear}
+\end{equation}
+Como $\sqrt{16} = 4 = 2^2$, a normaliza\c{c}\~{a}o ortonormal $1/\sqrt{16}$ reduz-se a um deslocamento aritm\'{e}tico exato de 2 bits para a direita (\texttt{>>> 2}), e a matriz $\tilde{\mathbf{W}}$ aprendida por retropropaga\c{c}\~{a}o permanece estritamente em $\{-1, 0, +1\}$ durante a infer\^{e}ncia no FPGA.
+
+\subsection{Por que o PoT Convencional Falha na Recorr\^{e}ncia e a Deriva\c{c}\~{a}o do CPoT}
+Aceleradores recentes como \emph{LightMamba} \cite{wei2025lightmamba} e \emph{FastMamba} \cite{fastmamba2025} prop\~{o}em substituir a multiplica\c{c}\~{a}o recorrente $\bar{A}_t \cdot h_{t-1}$ por deslocamentos de bits via quantiza\c{c}\~{a}o \emph{Power-of-Two} (PoT) padr\~{a}o: $\bar{A}_t^{\text{PoT}} = 2^{-k}$, com $k \in \{1, 2, \dots, K_{\max}\}$. Entretanto, nos canais respons\'{a}veis pela mem\'{o}ria de longo alcance do Mamba, o passo $\Delta_t A_h$ \'{e} pequeno ($\Delta_t A_h \in [0{,}001,\,0{,}10]$), situando $\bar{A}_t = \exp(-\Delta_t A_h)$ no intervalo $[0{,}90,\,0{,}999]$. Na grade PoT padr\~{a}o $\{0{,}5,\,0{,}25,\,0{,}125,\dots\}$, \textbf{n\~{a}o existe nenhum n\'{\i}vel represent\'{a}vel entre $0{,}5$ e $1{,}0$}: arredondar $\bar{A}_t = 0{,}97$ para $0{,}5$ reduz a meia-vida do estado de $23$ tokens para apenas $1$ token ($0{,}5^{10} < 10^{-3}$), enquanto arredondar para $1{,}0$ remove o amortecimento e causa instabilidade num\'{e}rica.
+
+Pela expans\~{a}o de Taylor de primeira ordem em torno de $\Delta_t A_h \to 0^+$, temos $\exp(-\Delta_t A_h) \approx 1 - \Delta_t A_h$. Se aproximarmos o decremento $\Delta_t A_h$ por uma pot\^{e}ncia de dois $2^{-k}$, obtemos a grade complementar $1 - 2^{-k} \in \{0{,}75,\,0{,}875,\,0{,}9375,\,0{,}96875,\,0{,}984375,\,0{,}9921875,\dots\}$, cuja densidade de n\'{\i}veis cresce exponencialmente \`{a} medida que $\bar{A}_t \to 1^-$. Definimos, portanto, a discretiza\c{c}\~{a}o bimodal \textbf{Complementary Power-of-Two (CPoT)} controlada por 1 bit de modo $m \in \{0, 1\}$ e um expoente $k \in \{1,\dots,12\}$:
+\begin{equation}
+  \bar{A}_t^{\text{CPoT}}(m, k) =
+  \begin{cases}
+    2^{-k},     & \text{se } m = 0 \;\; (\bar{A}_t \le 0{,}625: \text{ decaimento r\'{a}pido}), \\
+    1 - 2^{-k}, & \text{se } m = 1 \;\; (\bar{A}_t > 0{,}625: \text{ mem\'{o}ria longa}).
+  \end{cases}
+  \label{eq:cpot}
+\end{equation}
+Em hardware, a atualiza\c{c}\~{a}o $\bar{A}_t^{\text{CPoT}} \cdot h_{t-1}$ executa em 1 ciclo sem multiplicadores: calcula-se $s = h_{t-1} \gg k$ em um \emph{barrel shifter} e seleciona-se $s$ (para $m=0$) ou $h_{t-1} - s$ (para $m=1$). Avaliamos tamb\'{e}m a extens\~{a}o de duplo deslocamento em d\'{\i}gito com sinal can\^{o}nico (\textbf{CPoT-2}): $\bar{A}_t^{\text{CPoT-2}} = 1 - 2^{-k_1} \pm 2^{-k_2}$.
+
+\section{Busca Sistem\'{a}tica e Trabalhos Relacionados}
+
+Para mapear rigorosamente o estado da arte, executamos uma busca sistem\'{a}tica (data-base: outubro de 2026) nas bases \emph{arXiv}, \emph{IEEE Xplore}, \emph{ACM Digital Library} e \emph{ACL Anthology} utilizando a express\~{a}o booleana: \texttt{("Mamba" OR "State Space Model" OR "SSM") AND ("ternary" OR "1.58-bit" OR "BitNet" OR "Quamba") AND ("FPGA" OR "hardware" OR "accelerator")}. A Tabela~\ref{tab:sota} sintetiza os trabalhos identificados e posiciona o \textbf{BitMamba-CV}.
+
+\begin{table}[htb]
+\centering
+\caption{Compara\c{c}\~{a}o sistem\'{a}tica com o estado da arte (2024--2026) em quantiza\c{c}\~{a}o e acelera\c{c}\~{a}o de modelos Mamba e BitNet.}
+\label{tab:sota}
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccccl}
+\toprule
+\textbf{Trabalho} & \textbf{Modelo} & \textbf{Pesos / Ativ.} & \textbf{Estado} & \textbf{Decaimento $\bar{A}_t$} & \textbf{Plataforma} & \textbf{Limita\c{c}\~{a}o Superada pelo BitMamba-CV} \\
+\midrule
+BitNet b1.58 \cite{ma2024era} & Transformer & $1{,}58\text{b}$ / INT8 & $O(L)$ KV & N/A & GPU / CPU & KV-Cache cresce com $L$; sem FWHT. \\
+BitNet v2 \cite{wang2025bitnetv2} & Transformer & $1{,}58\text{b}$ / INT4 & $O(L)$ KV & N/A & GPU & Restrito a Transformers em GPU. \\
+Quamba2 \cite{chiang2025quamba2} & Mamba-2 & W4A8 / W8A8 & $O(1)$ & FP16 / INT8 & GPU (Orin) & Absor\c{c}\~{a}o $\mathbf{W}\mathbf{H}^T$ inviabiliza pesos tern\'{a}rios. \\
+Bi-Mamba \cite{tang2024bimamba} & Mamba-1 & 1-bit / FP16 & $O(1)$ & FP16 & GPU & Pesos bin\'{a}rios; SSM em FP16; s\'{o} software. \\
+Slender-Mamba \cite{yu2025slendermamba} & Mamba-2 & $1{,}58\text{b}$ / INT8 & $O(1)$ & FP16 & GPU & Sem co-design de hardware ou CPoT no SSM. \\
+Ternary Mamba \cite{ganesaraja2026ternarymamba} & Mamba-2 & $1{,}58\text{b}$ / FP16 & $O(1)$ & FP16 & GPU & Ativa\c{c}\~{o}es e SSM mantidos em FP16. \\
+MARCA \cite{li2024marca} & Mamba-1 & INT8 / FP16 & $O(1)$ & PWL / MAC & ASIC Sim. & Proje\c{c}\~{o}es densas exigem matrizes de MACs. \\
+LightMamba \cite{wei2025lightmamba} & Mamba-2 & W4A4 & $O(1)$ & PoT ($2^{-k}$) & Alveo U280 & Usa DSPs nas proje\c{c}\~{o}es; PoT perde $\bar{A}_t \approx 1$. \\
+FastMamba \cite{fastmamba2025} & Mamba-2 & W8A8 & $O(1)$ & PoT ($2^{-k}$) & Virtex-7 & Pesos lineares em 8 bits ($5\times$ maiores). \\
+TerEffic \cite{yin2025tereffic} & Transformer & $1{,}6\text{b}$ / INT8 & $O(L)$ KV & N/A & Alveo U280 & Preso ao KV-Cache $O(L)$ e HBM de Data Center. \\
+TeLLMe \cite{qiao2025tellme} & Transformer & $1{,}58\text{b}$ / INT8 & $O(L)$ KV & N/A & Kria KV260 & Gargalo de KV-Cache em DDR em sequ\^{e}ncias longas. \\
+\midrule
+\textbf{BitMamba-CV} & \textbf{Mamba-2} & \textbf{$1{,}6\text{b}$ / INT8} & \textbf{$O(1)$ M10K} & \textbf{CPoT ($1-2^{-k}$)} & \textbf{Cyclone V} & \textbf{Une H-BitLinear Radix-3 + CPoT SSM em Borda.} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Nota-se que componentes individuais --- como o empacotamento de 5 trits por byte ($1{,}60\text{ bits/peso}$) em \emph{TerEffic} \cite{yin2025tereffic} e a busca em tabela (\texttt{TLMM}) em \emph{T-MAC}/\emph{TeLLMe} \cite{wei2024tmac,qiao2025tellme} --- j\'{a} foram validados para Transformers. Nossa contribui\c{c}\~{a}o reside na \textbf{primeira integra\c{c}\~{a}o co-projetada entre proje\c{c}\~{o}es tern\'{a}rias \texttt{H-BitLinear} e o caminho recorrente seletivo do Mamba-2 com discretiza\c{c}\~{a}o CPoT}, viabilizando a execu\c{c}\~{a}o em um FPGA de borda de 28\,nm.
+
+\section{Arquitetura Proposta: BitMamba-CV na Intel Cyclone V}
+
+\subsection{Codifica\c{c}\~{a}o Radix-3 nas Mem\'{o}rias M10K e Decodificador em 1 Ciclo}
+Armazenar cada peso tern\'{a}rio $w_i \in \{-1, 0, +1\}$ em 2 bits desperdi\c{c}a $20{,}7\%$ da capacidade dos blocos M10K ($\log_2(3) \approx 1{,}585\text{ bits}$). Como $3^5 = 243 \le 256 = 2^8$, mapeamos cada grupo de 5 pesos tern\'{a}rios para d\'{\i}gitos $d_i = w_i + 1 \in \{0, 1, 2\}$ e empacotamos em 1 byte:
+\begin{equation}
+  B_{\text{packed}} = \sum_{i=0}^{4} (w_i + 1)\cdot 3^i \in [0, 242], \qquad \text{Custo} = \frac{8\text{ bits}}{5\text{ pesos}} = 1{,}60\text{ bits/peso}.
+  \label{eq:radix3}
+\end{equation}
+No m\'{o}dulo RTL \texttt{radix3\_decoder.v}, cada byte lido da mem\'{o}ria M10K alimenta uma tabela verdade combinacional de 8 entradas e 10 sa\'{\i}das (5 pares de bits \texttt{(w\_nz, w\_neg)}). Como cada ALM da Intel Cyclone~V cont\'{e}m LUTs fracion\'{a}veis de 6 entradas, o Intel Quartus sintetiza cada bit de sa\'{\i}da usando apenas 4 LUTs combinadas, decodificando 5 trits em menos de $1{,}2\text{ ns}$ (1 ciclo) com sobrecusto de apenas $5{,}25\text{ ALMs}$ por via de processamento, economizando $20\%$ de todos os blocos M10K de pesos.
+
+\subsection{Microarquitetura \texttt{BitLinear} Zero-DSP e Explora\c{c}\~{a}o de Esparsidade}
+Investigamos tr\^{e}s microarquiteturas para o motor de produto interno tern\'{a}rio de largura $P$ (\texttt{bitlinear\_pe.v}):
+\begin{enumerate}
+  \item \textbf{\'{A}rvore Somadora em Cadeia de \emph{Carry} (\texttt{R3-Adder}):} Cada elemento de processamento realiza a invers\~{a}o/zeramento condicional da ativa\c{c}\~{a}o $x_j \in \text{INT8}$ controlada por \texttt{(w\_nz, w\_neg)} diretamente na entrada da cadeia de \emph{carry} dedicada do ALM, somando $P$ termos em uma \'{a}rvore bin\'{a}ria registrada com \textbf{0 blocos DSP}.
+  \item \textbf{Multiplica\c{c}\~{a}o por Busca em Tabela (\texttt{R3-TLMM}):} Inspirado em \cite{qiao2025tellme}, agrupa $G=4$ ativa\c{c}\~{o}es de entrada para pré-computar as $3^4 = 81$ somas tern\'{a}rias poss\'{\i}veis, reduzindo em $4\times$ o n\'{u}mero de somadores na \'{a}rvore de redu\c{c}\~{a}o e reduzindo o uso de ALMs em $23\%$.
+  \item \textbf{Salto Estruturado de Zeros (\texttt{R3-ZeroSkip}):} Nossos experimentos de QAT (Se\c{c}\~{a}o~5.2) revelam que $39{,}0\%$ dos pesos tern\'{a}rios treinados convergem exatamente para $w_{ij}=0$. Adicionando um compactador de m\'{a}scara n\~{a}o-nula na sa\'{\i}da do decodificador Radix-3, pulamos fatias nulas e reduzimos os ciclos da proje\c{c}\~{a}o linear em $1{,}36\times$.
+\end{enumerate}
+
+\subsection{Pipeline FWHT 16-pt e Scan Seletivo com Discretiza\c{c}\~{a}o CPoT}
+O m\'{o}dulo \texttt{fwht\_16\_stream.v} implementa os 4 est\'{a}gios de borboleta ($\log_2 16 = 4$) da Equa\c{c}\~{a}o~(\ref{eq:hbitlinear}) usando exclusivamente somadores/subtratores de 12 bits nos ALMs seguidos de deslocamento fixo \texttt{>>> 2} e satura\c{c}\~{a}o sim\'{e}trica em $[-127, 127]$, entregando 16 canais rotacionados por ciclo com lat\^{e}ncia de 4 ciclos e 0 DSPs.
+
+No m\'{o}dulo \texttt{cpot\_selective\_scan.v}, o banco de registradores/M10K mant\'{e}m o estado recorrente $\mathbf{h}_t$ em ponto fixo Q8.8 (16 bits). A cada passo, o decaimento $\bar{A}_t^{\text{CPoT}} \cdot \mathbf{h}_{t-1}$ \'{e} calculado em ALMs por \texttt{h\_shifted = h\_state >>> k} e \texttt{h\_decay = mode ? (h\_state - h\_shifted) : h\_shifted}. A função $\text{SiLU}(x)$ \'{e} avaliada por interpola\c{c}\~{a}o linear por partes (PWL) de 16 segmentos em $[-4, 4)$ com passo $\Delta x = 0{,}5 = 2^{-1}$, permitindo indexar a tabela diretamente pelos bits superiores de $x$ sem comparadores complexos.
+
+\subsection{Transpar\^{e}ncia na Aloca\c{c}\~{a}o Heterog\^{e}nea: Onde Usamos ALMs vs. DSPs}
+Ao contr\'{a}rio de propostas que alegam genericamente ``zero multiplicadores'', ressaltamos que um bloco Mamba-2 completo cont\'{e}m multiplica\c{c}\~{o}es din\^{a}micas essenciais fora das proje\c{c}\~{o}es lineares: a inje\c{c}\~{a}o seletiva $\bar{B}_t x_t$, a leitura de estado $C_t h_t$, a convolu\c{c}\~{a}o \emph{depthwise} \texttt{Conv1D} ($k=4$), o \emph{gating} $y_t \odot \text{SiLU}(z_t)$ e o fator de reescalonamento $\gamma_W \cdot \beta_X$ do \texttt{RMSNorm}/\texttt{absmax}. Como a Intel Cyclone~V j\'{a} possui blocos DSP de precis\~{a}o vari\'{a}vel no sil\'{\i}cio, a estrat\'{e}gia do \textbf{BitMamba-CV} consiste em \textbf{transferir $100\%$ do produto interno das proje\c{c}\~{o}es lineares ($85{,}8\%$ das opera\c{c}\~{o}es totais), a FWHT ($3{,}1\%$) e o decaimento CPoT para os ALMs}, liberando os blocos DSP para executar paralelamente e sem conten\c{c}\~{a}o as opera\c{c}\~{o}es din\^{a}micas do SSM. A Figura~\ref{fig:breakdown} e a Tabela~\ref{tab:submodules} detalham o consumo exato de recursos por sub-m\'{o}dulo para $P=32$.
+
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=0.88\textwidth]{fig_resource_breakdown.pdf}
+  \caption{Distribui\c{c}\~{a}o percentual de ALMs, blocos M10K e blocos DSP entre os sub-m\'{o}dulos do BitMamba-CV ($P=32$) na Intel Cyclone~V.}
+  \label{fig:breakdown}
+\end{figure}
+
+\begin{table}[htb]
+\centering
+\caption{Detalhamento de recursos por sub-m\'{o}dulo do acelerador BitMamba-CV ($P=32$ vias, \texttt{R3-Adder}) na Intel Cyclone~V (\texttt{5CSEBA6U23I7}).}
+\label{tab:submodules}
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccl}
+\toprule
+\textbf{Sub-M\'{o}dulo RTL} & \textbf{\% OPs} & \textbf{ALMs} & \textbf{M10K} & \textbf{DSPs} & \textbf{Precis\~{a}o} & \textbf{Justificativa Arquitetural} \\
+\midrule
+Motor \texttt{BitLinear} ($P=32$) & 85,8\% & 1.120 & 48 & 2* & $1{,}6\text{b}\times\text{INT8}$ & Produto interno em ALMs (*2 DSPs s\'{o} p/ escala $\gamma$). \\
+Decodificadores Radix-3 & --- & 168 & 0 & 0 & $8\text{b} \to 5\text{ trits}$ & LUT combinacional pura em 1 ciclo. \\
+Pipeline \texttt{FWHT} (16-pt) & 3,1\% & 312 & 0 & 0 & INT12 $\to$ INT8 & 4 est\'{a}gios de soma/subtra\c{c}\~{a}o + shift \texttt{>>> 2}. \\
+Scan Seletivo \texttt{CPoT} & 7,8\% & 640 & 16 & 16 & Q8.8 / INT8 & $\bar{A}_t h_{t-1}$ em ALMs; $\bar{B}_t x_t, C_t h_t$ e gate em DSPs. \\
+\texttt{Conv1D} ($k=4$) + PWL \texttt{SiLU} & 2,2\% & 290 & 4 & 8 & INT8 / Q8.8 & Filtros \emph{depthwise} e interpola\c{c}\~{a}o $a x + b$ em DSPs. \\
+\texttt{RMSNorm} + \texttt{AbsMax} + AXI & 1,1\% & 385 & 2 & 2 & INT16 / LUT & Comparadores \texttt{max}, LUT \texttt{rsqrt} e ponte AXI. \\
+\midrule
+\textbf{Total BitMamba-CV ($P=32$)} & \textbf{100\%} & \textbf{2.915 (7,0\%)} & \textbf{70 (12,7\%)} & \textbf{28 (25,0\%)} & \textbf{Mista Co-Projetada} & \textbf{Zero DSPs no produto interno linear e na FWHT.} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\subsection{Implica\c{c}\~{o}es Pr\'{a}ticas como Prot\'{o}tipo para Futuras GPUs e NPUs}
+Al\'{e}m da aplica\c{c}\~{a}o direta em FPGAs de borda, os quatro blocos validados no \textbf{BitMamba-CV} traduzem-se diretamente em unidades microarquiteturais candidatas para \emph{Streaming Multiprocessors} (SMs) de futuras GPUs: (i) o decodificador Radix-3 integrado \`{a} \emph{Load/Store Unit} (LSU) ou \emph{Tensor Memory Accelerator} (TMA) descomprime pesos de $1{,}60\text{ bits}$ em voo ao carregar da HBM para o banco de registradores, ampliando a banda efetiva da HBM em $25\%$ sobre 2 bits e $2{,}5\times$ sobre FP4 sem instru\c{c}\~{o}es de ALU; (ii) o modo \texttt{MMA.TERNARY} com \emph{power-gating} da \'{a}rvore de multiplicadores de Booth nos \emph{Tensor Cores} reduz a dissipa\c{c}\~{a}o t\'{e}rmica; e (iii) o deslocador bimodal \texttt{CPoT} acoplado \`{a}s \emph{Special Function Units} (SFUs) elimina o gargalo de exponenciais na recorr\^{e}ncia de modelos SSM.
+
+\section{Metodologia Experimental, Abla\c{c}\~{a}o e Resultados}
+
+\textbf{Metodologia e Verifica\c{c}\~{a}o Bit-Exata:} Implementamos um \emph{Golden Model} em Python/NumPy inteiramente em aritm\'{e}tica inteira (\texttt{golden\_model\_bitexact.py}) que reproduz bit a bit cada est\'{a}gio do hardware RTL (\texttt{radix3\_decoder.v}, \texttt{fwht\_16\_stream.v}, \texttt{bitlinear\_pe.v} e \texttt{cpot\_selective\_scan.v}), validado com erro zero (\texttt{0 LSB mismatch}) nas tr\^{e}s microarquiteturas (\texttt{Adder-Tree}, \texttt{TLMM} e \texttt{Zero-Skip}). A s\'{\i}ntese de hardware visa o dispositivo Intel Cyclone~V SoC \texttt{5CSEBA6U23I7} (placa DE10-Nano: $41.910\text{ ALMs}$, $553\text{ blocos M10K} \approx 553\text{ KB}$ \'{u}teis e $112\text{ blocos DSP}$) no Intel Quartus Prime, com estimativa de pot\^{e}ncia no \emph{PowerPlay Power Analyzer} anotada por arquivo de atividade real (\texttt{.vcd}) extra\'{\i}do da simula\c{c}\~{a}o do testbench. Todos os experimentos de treinamento QAT foram executados com 3 sementes aleat\'{o}rias independentes (\texttt{seeds} $\in \{42, 100, 2026\}$), reportando m\'{e}dia $\pm$ desvio padr\~{a}o.
+
+\subsection{Experimento 1: Reten\c{c}\~{a}o de Mem\'{o}ria Longa (PoT vs. CPoT) e Mem\'{o}ria O(1) vs. O(L)}
+A Figura~\ref{fig:long_range}(a) e a Tabela~\ref{tab:long_range} avaliam a fidelidade do estado recorrente final $\mathbf{y}_L$ em fun\c{c}\~{a}o do comprimento da sequ\^{e}ncia $L \in [64,\,16.384]$ quando os autovalores das cabe\c{c}as abrangem o regime de mem\'{o}ria longa $\bar{A}_t \in [0{,}90,\,0{,}9995]$.
+
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=0.98\textwidth]{fig_long_range_scaling.pdf}
+  \caption{(a) SQNR de leitura do estado final $\mathbf{y}_L$ (dB) variando $L$ de $64$ a $16.384$: o PoT convencional ($2^{-k}$) colapsa a mem\'{o}ria longa, enquanto o CPoT e o CPoT-2 preservam o estado sem multiplicadores. (b) Consumo de mem\'{o}ria de estado \emph{on-chip} na Cyclone~V: o KV-Cache $O(L)$ de um Transformer $1{,}58$-bit estoura o limite das M10K em $L \approx 512$, enquanto o BitMamba-CV permanece constante em $18\text{ KB}$ ($O(1)$).}
+  \label{fig:long_range}
+\end{figure}
+
+\begin{table}[htb]
+\centering
+\caption{Erro de quantiza\c{c}\~{a}o de $\bar{A}_t \in [0{,}90,\,0{,}999]$ e SQNR / Recall do estado recorrente em sequ\^{e}ncias longas (m\'{e}dia de 3 \emph{seeds}).}
+\label{tab:long_range}
+\footnotesize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccc}
+\toprule
+\textbf{Esquema de} & \textbf{Usa} & \textbf{RMSE em} & \textbf{SQNR $\bar{A}_t$} & \textbf{SQNR $\mathbf{y}_L$} & \textbf{SQNR $\mathbf{y}_L$} & \textbf{SQNR $\mathbf{y}_L$} & \textbf{Recall em} \\
+\textbf{Discretiza\c{c}\~{a}o $\bar{A}_t$} & \textbf{DSP?} & $[0{,}90,\,0{,}999]$ & \textbf{Long-Mem} & ($L=256$) & ($L=2.048$) & ($L=16.384$) & $L=16.384$ \\
+\midrule
+Ponto Fixo 16-bit (Q1.15) & Sim & 0,00001 & 100,66 dB & 82,57 dB & 38,70 dB & 37,60 dB & 100,0\% \\
+PoT Padr\~{a}o ($2^{-k}$) \cite{wei2025lightmamba,fastmamba2025} & N\~{a}o & 0,45043 & 6,48 dB & 0,00 dB & 0,00 dB & 0,06 dB & 28,4\% \\
+\textbf{CPoT Proposto ($\{2^{-k}, 1-2^{-k}\}$)} & \textbf{N\~{a}o} & \textbf{0,01423} & \textbf{36,49 dB} & \textbf{19,87 dB} & \textbf{24,84 dB} & \textbf{29,38 dB} & \textbf{100,0\%} \\
+\textbf{CPoT-2 Proposto ($1-2^{-k_1}\pm 2^{-k_2}$)} & \textbf{N\~{a}o} & \textbf{0,00246} & \textbf{51,72 dB} & \textbf{52,69 dB} & \textbf{46,08 dB} & \textbf{46,61 dB} & \textbf{100,0\%} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Os resultados comprovam nossa hip\'{o}tese: o PoT convencional ($2^{-k}$) apresenta RMSE de $0{,}45043$ na regi\~{a}o cr\'{\i}tica $[0{,}90,\,0{,}999]$, derrubando o SQNR do estado final para $0{,}00\text{ dB}$ em todos os comprimentos testados. O \textbf{CPoT proposto} reduz o RMSE em $31{,}6\times$ (para $0{,}01423$), elevando o SQNR de autovalores em $+30{,}01\text{ dB}$ e mantendo $100\%$ de recall do sinal de gatilho at\'{e} $L=16.384$ sem usar multiplicadores. Notavelmente, para $L \ge 2.048$, o \textbf{CPoT-2} ($46{,}61\text{ dB}$ em $L=16.384$) supera at\'{e} mesmo o ponto fixo uniforme de 16 bits ($37{,}60\text{ dB}$), pois a resolu\c{c}\~{a}o logar\'{\i}tmica de $1 - 2^{-k_1} \pm 2^{-k_2}$ em torno de $1{,}0$ ($k_{\max}=17$) \'{e} mais densa perto de $1 - 10^{-4}$ do que a grade uniforme Q1.15. Na Figura~\ref{fig:long_range}(b), observa-se que um acelerador Transformer $1{,}58$-bit (\emph{TeLLMe}/\emph{TerEffic} com 4 camadas, $D_{\text{inner}}=128$, KV em INT8) ultrapassa toda a capacidade M10K da Cyclone~V ($553\text{ KB}$) logo ap\'{o}s $L=512$ (exigindo $16\text{ MB}$ em $L=16.384$), ao passo que o estado recorrente do \textbf{BitMamba-CV} ocupa $18{,}0\text{ KB}$ fixos para qualquer $L$.
+
+\subsection{Experimento 2: Estudo de Abla\c{c}\~{a}o Incremental de 8 Est\'{a}gios (QAT com 3 Seeds)}
+A Tabela~\ref{tab:ablation} apresenta o estudo de abla\c{c}\~{a}o isolando cada uma das t\'{e}cnicas propostas no benchmark sequencial multiescala com canais \emph{outliers}.
+
+\begin{table}[htb]
+\centering
+\caption{Estudo de abla\c{c}\~{a}o incremental (m\'{e}dia $\pm$ desvio padr\~{a}o em 3 \emph{seeds}) e impacto no armazenamento de pesos do modelo de 2 camadas ($D=128, D_{\text{inner}}=256$).}
+\label{tab:ablation}
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llcccccc}
+\toprule
+\textbf{ID} & \textbf{Configura\c{c}\~{a}o de Abla\c{c}\~{a}o} & \textbf{Pesos / Codif.} & \textbf{FWHT} & \textbf{Modo $\bar{A}_t$} & \textbf{Pesos (KB)} & \textbf{SQNR Sa\'{\i}da (dB)} & \textbf{Acur\'{a}cia Teste (\%)} \\
+\midrule
+A0 & Baseline FP32 (Refer\^{e}ncia Software) & FP32 (16/32b) & N\~{a}o & Exato ($\exp$) & 522,1 KB* & $\infty$ & $93,49 \pm 0,66\%$ \\
+A1 & Baseline INT8-DSP (W8A8) & INT8 (8,0b) & N\~{a}o & Fixo 16-bit & 264,1 KB & $19,84 \pm 0,72$ & $92,71 \pm 0,81\%$ \\
+A2 & Baseline INT4 (W4A8) & INT4 (4,0b) & N\~{a}o & Fixo 16-bit & 135,1 KB & $14,62 \pm 0,95$ & $91,15 \pm 0,92\%$ \\
+A3 & Tern\'{a}rio Ing\^{e}nuo (Sem FWHT) & $1{,}58\text{b}$ (2,0b) & \textbf{N\~{a}o} & Fixo 16-bit & 70,6 KB & $7,45 \pm 1,18$ & $83,85 \pm 1,45\%$ \\
+A4 & + \texttt{H-BitLinear} QAT (2-bit) & $1{,}58\text{b}$ (2,0b) & \textbf{Sim} & Fixo 16-bit & 70,6 KB & $15,91 \pm 0,64$ & $91,93 \pm 0,74\%$ \\
+A5 & + Empacotamento Radix-3 & $1{,}58\text{b}$ (\textbf{1,6b}) & Sim & Fixo 16-bit & \textbf{57,7 KB} & $15,91 \pm 0,64$ & $91,93 \pm 0,74\%$ \\
+A6 & + SSM PoT Padr\~{a}o ($2^{-k}$) + PWL & $1{,}58\text{b}$ (1,6b) & Sim & \textbf{PoT ($2^{-k}$)} & 57,7 KB & $5,12 \pm 1,30$ & $76,30 \pm 1,82\%$ \\
+\textbf{A7} & \textbf{BitMamba-CV Completo (CPoT)} & \textbf{$1{,}58\text{b}$ (1,6b)} & \textbf{Sim} & \textbf{CPoT ($1-2^{-k}$)} & \textbf{57,7 KB} & \textbf{$15,48 \pm 0,68$} & \textbf{$91,67 \pm 0,78\%$} \\
+\bottomrule
+\multicolumn{8}{l}{\scriptsize *Tamanho FP16 mostrado para compara\c{c}\~{a}o justa de mem\'{o}ria embarcada; esparsidade m\'{e}dia de pesos zero ($W=0$) em A7: $39{,}0 \pm 1{,}4\%$.}
+\end{tabular}%
+}
+\end{table}
+
+Tr\^{e}s conclus\~{o}es emergem da Tabela~\ref{tab:ablation}:
+\begin{enumerate}
+  \item \textbf{Efeito da FWHT em \texttt{H-BitLinear} (A3 $\to$ A4):} Sem a rota\c{c}\~{a}o de Hadamard no loop de QAT (A3), os canais de ativa\c{c}\~{a}o com \emph{outliers} dominam a escala \texttt{absmax}, derrubando o SQNR para $7{,}45\text{ dB}$ e a acur\'{a}cia em $-9{,}64$ pontos percentuais. A inser\c{c}\~{a}o da FWHT de 16 pontos (A4) recupera $+8{,}46\text{ dB}$ de SQNR e eleva a acur\'{a}cia para $91{,}93\%$.
+  \item \textbf{Compress\~{a}o Radix-3 Lossless (A4 $\to$ A5):} O empacotamento Radix-3 reduz a mem\'{o}ria de pesos de $522{,}1\text{ KB}$ (FP16) e $264{,}1\text{ KB}$ (INT8) para apenas $57{,}7\text{ KB}$ ($9{,}0\times$ menor que FP16, $4{,}6\times$ menor que INT8 e $18{,}3\%$ menor que o formato de 2 bits em todo o modelo), com zero perda num\'{e}rica.
+  \item \textbf{Colapso do PoT Padr\~{a}o vs. Recupera\c{c}\~{a}o do CPoT (A6 $\to$ A7):} Ao substituir o $\bar{A}_t$ em ponto fixo pelo PoT padr\~{a}o ($2^{-k}$, A6), o modelo perde a capacidade de correlacionar o pulso inicial ($t \in [0, 6]$) ao final da sequ\^{e}ncia, caindo para $76{,}30\%$. O \textbf{CPoT (A7)} restaura a acur\'{a}cia para $91{,}67\%$ (a apenas $1{,}04\%$ do baseline INT8 que usa DSPs em tudo).
+\end{enumerate}
+
+\subsection{Experimento 3: Explora\c{c}\~{a}o do Espa\c{c}o de Projeto (DSE) no Mesmo Chip e Roofline Dual-Regime}
+A Tabela~\ref{tab:dse} e a Figura~\ref{fig:roofline} comparam as cinco variantes microarquiteturais sintetizadas na mesma Intel Cyclone~V (\texttt{5CSEBA6U23I7}) para $P \in \{8, 16, 32, 64\}$. Como os blocos DSP j\'{a} est\~{a}o presentes no chip, reportamos a \textbf{\'{A}rea Equivalente Normalizada} ($\text{ALM}_{\text{eq}} = \text{ALMs} + 120\cdot\text{DSPs}$, onde $120\text{ ALMs}$ equivalem ao custo l\'{o}gico de dois multiplicadores $18\times 18$).
+
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=0.98\textwidth]{fig_roofline_and_pareto.pdf}
+  \caption{(a) Modelo \emph{Roofline} Dual-Regime na Intel Cyclone~V SoC: compara\c{c}\~{a}o honesta entre o regime \emph{Off-Chip DDR3} (Config.~B, onde `batch=1` \'{e} \emph{Memory-Bound} e o Radix-3 acelera a vaz\~{a}o em $5{,}0\times$ sobre INT8 ao longo da rampa de mem\'{o}ria) e o regime \emph{On-Chip M10K} (Config.~A, \emph{Compute-Bound}). (b) Fronteira de Pareto no mesmo chip ($P \in \{8, 16, 32, 64\}$) em Tokens/s por milhar de $\text{ALMs}_{\text{eq}}$.}
+  \label{fig:roofline}
+\end{figure}
+
+\begin{table}[htb]
+\centering
+\caption{Compara\c{c}\~{a}o no mesmo FPGA Intel Cyclone~V (\texttt{5CSEBA6U23I7}) para $P=32$ vias (modelo de 2 camadas, $D=128, D_{\text{inner}}=256$).}
+\label{tab:dse}
+\footnotesize
+\setlength{\tabcolsep}{3.8pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccccc}
+\toprule
+\textbf{Arquitetura na Cyclone V} & \textbf{Codif.} & \textbf{ALMs} & \textbf{DSPs} & \textbf{M10K} & $\textbf{ALM}_{\textbf{eq}}$ & $F_{\max}$ & \textbf{Tok/s} & \textbf{Tok/s por} & \textbf{Efici\^{e}ncia} \\
+($P=32$ Vias Paralelas) & \textbf{Pesos} & \textbf{Usados} & \textbf{Usados} & \textbf{Blocos} & \textbf{Total} & \textbf{(MHz)} & \textbf{(On-Chip)} & $\textbf{kALM}_{\textbf{eq}}$ & \textbf{(Tok / Joule)} \\
+\midrule
+Baseline \texttt{Mamba2-INT8-DSP} & 8,0-bit & 1.891 & 44 (39\%) & 228 (41\%) & 7.171 & 188,0 & 22.386 & 3.122 & 22.843 \\
+\texttt{BitMamba2-2bit-Adder} & 2,0-bit & 2.403 & 28 (25\%) & 62 (11\%) & 5.763 & 204,0 & 24.291 & 4.215 & 29.266 \\
+\texttt{BitMamba2-R3-Adder} & 1,6-bit & 2.571 & 28 (25\%) & \textbf{52 (9\%)} & 5.931 & 200,0 & 23.815 & 4.015 & 28.351 \\
+\textbf{\texttt{BitMamba2-R3-TLMM}} & \textbf{1,6-bit} & \textbf{2.283} & \textbf{28 (25\%)} & 56 (10\%) & \textbf{5.643} & \textbf{209,6} & \textbf{24.958} & \textbf{4.423} & \textbf{30.812} \\
+\textbf{\texttt{BitMamba2-R3-ZeroSkip}} & \textbf{1,6-bit} & 2.923 & \textbf{28 (25\%)} & 54 (10\%) & 6.283 & 199,0 & \textbf{32.045} & \textbf{5.100} & \textbf{36.415} \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\textbf{An\'{a}lise dos Resultados no Mesmo Chip (Tabela~\ref{tab:dse}):}
+\begin{itemize}
+  \item \textbf{Custo Honesto do Decodificador Radix-3 (\texttt{2bit-Adder} vs. \texttt{R3-Adder}):} O decodificador Radix-3 adiciona $168\text{ ALMs}$ ($+7{,}0\%$) em $P=32$, mas economiza $10$ blocos M10K ($-16{,}1\%$ na mem\'{o}ria total, $-20{,}0\%$ nos buffers de pesos). Em modelos maiores (Config.~B), essa economia permite manter $25\%$ mais camadas residentes \emph{on-chip}.
+  \item \textbf{Superioridade do \texttt{R3-TLMM} e \texttt{R3-ZeroSkip}:} A microarquitetura \texttt{R3-TLMM} (grupos de 4 trits) reduz os ALMs para $2.283$ (menos que o \texttt{2bit-Adder}) e atinge a maior frequ\^{e}ncia ($209{,}6\text{ MHz}$), superando o baseline \texttt{INT8-DSP} em $+41{,}7\%$ em $\text{Tokens/s/kALM}_{\text{eq}}$. J\'{a} a variante \texttt{R3-ZeroSkip} explora os $39\%$ de pesos zero para reduzir os ciclos de proje\c{c}\~{a}o de $8.256$ para $6.071$ ciclos/token, alcan\c{c}ando $32.045\text{ Tokens/s}$ ($+63{,}4\%$ em efici\^{e}ncia de \'{a}rea equivalente e $+59{,}4\%$ em $\text{Tokens/Joule}$ sobre o \texttt{INT8-DSP}, reduzindo o uso de blocos M10K em $4{,}2\times$).
+  \item \textbf{An\'{a}lise \emph{Roofline} Honesta (Figura~\ref{fig:roofline}a):} Na Configura\c{c}\~{a}o~A (modelo de borda compacto residente nas M10K, largura de banda interna de $64\text{ GB/s}$), o acelerador opera no plat\^{o} \emph{Compute-Bound} ($12{,}8\text{ GOPS}$). Em contrapartida, ao executar um modelo grande (ex.: \emph{Bi-Mamba} de $130\text{M}$--$780\text{M}$ par\^{a}metros) com pesos armazenados na DDR3 externa via ponte AXI HPS-to-FPGA (banda pr\'{a}tica de $\sim 2{,}8\text{ GB/s}$, Configura\c{c}\~{a}o~B) em \texttt{batch=1}, a intensidade operacional de $10\text{ OPs/Byte}$ posiciona a aplica\c{c}\~{a}o na \textbf{rampa inclinada limitada por mem\'{o}ria (\emph{Memory-Bandwidth Bound})}. Nesse regime, o ganho do \textbf{BitMamba-CV} adv\'{e}m diretamente da redu\c{c}\~{a}o de tr\'{a}fego de bytes por token: a compress\~{a}o Radix-3 ($1{,}6\text{ bits/peso}$) eleva a vaz\~{a}o limitada por DDR3 em exatos $\mathbf{5{,}0\times}$ frente ao baseline INT8 e $\mathbf{+25\%}$ frente ao formato tern\'{a}rio de 2 bits.
+\end{itemize}
+
+\section{Conclus\~{a}o e Trabalhos Futuros}
+
+Apresentamos o \textbf{BitMamba-CV}, o primeiro co-design hardware-algoritmo que unifica proje\c{c}\~{o}es tern\'{a}rias de $1{,}58\text{ bits}$ no dom\'{\i}nio de Walsh-Hadamard (\texttt{H-BitLinear}) \`{a} recorr\^{e}ncia de mem\'{o}ria constante $O(1)$ do Mamba-2 em um FPGA de borda Intel Cyclone~V. Demonstramos matematicamente e via simula\c{c}\~{a}o bit-exata que (i) treinar os pesos tern\'{a}rios ap\'{o}s a FWHT no QAT preserva a aritm\'{e}tica sem multiplicadores suprimindo \emph{outliers} ($+8{,}46\text{ dB}$ de SQNR), (ii) a discretiza\c{c}\~{a}o bimodal \textbf{CPoT} ($\{2^{-k}, 1-2^{-k}\}$) elimina o colapso de mem\'{o}ria longa do PoT convencional ($+30{,}01\text{ dB}$ de SQNR na regi\~{a}o $\bar{A}_t \to 1^-$), e (iii) as microarquiteturas \texttt{R3-TLMM} e \texttt{R3-ZeroSkip} reduzem o consumo de mem\'{o}ria M10K em $4{,}2\times$ e elevam a efici\^{e}ncia de \'{a}rea normalizada em até $63{,}4\%$ frente a um baseline Mamba-2 INT8 no mesmo FPGA. Como trabalho futuro, estenderemos o controlador DMA AXI no HPS ARM Cortex-A9 da DE10-Nano para modelos h\'{\i}bridos SSM-Aten\c{c}\~{a}o com pagina\c{c}\~{a}o dupla em DDR3.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
