@@ -1,9 +1,11 @@
 """
-QAT ablation (A0..A8) on ECG5000 (real, L=140) and a delayed-cue recall task
-(synthetic, L in {256, 1024}); 5 seeds (3 for L=1024). For the hardware-scan configs the trained
-model is re-evaluated with the bit-exact integer scan of the RTL (golden model).
+Scan ablation (S0..S6): projections fixed (FP32 in S0, W8A8 elsewhere), only the scan changes.
+Tasks: ECG5000 (real, L=140), delayed-cue recall (synthetic, L in {256, 1024}) and windowed
+majority (synthetic, L=512, needs an intermediate time constant). 5 seeds (3 for L=1024).
+For the hardware-scan configs the trained model is re-evaluated with the bit-exact integer
+scan of the RTL (golden model).
 
-Usage: python3 train_ablation.py [--tasks ecg5000 cue256 cue1024] [--seeds N] [--configs ...]
+Usage: python3 train_ablation.py [--tasks ecg5000 cue256 cue1024 win512] [--seeds N] [--configs ...]
 Writes results/ablation_<task>.json
 """
 
@@ -63,28 +65,55 @@ def make_delayed_cue(L: int, n_train=4000, n_test=1000, seed=7):
             TensorDataset(x[n_train:], y[n_train:]), 8, 4)
 
 
+def make_window_majority(L: int = 512, W: int = 64, n_train=4000, n_test=1000, seed=7):
+    """
+    2 classes: which event type (channel 0 = A, 1 = B) is the majority among the 15 events
+    (each A or B with prob. 1/2, so the last few events say little) of the last W steps. Before the window, events (rate 0.25) carry an independent strong
+    bias (85/15). A state that never forgets (Abar = 1) is dominated by the history; one that
+    forgets too fast (Abar <= 0.5) cannot accumulate the window -> needs tau ~ W/2.
+    4 channels, Gaussian noise std 0.1.
+    """
+    g = torch.Generator().manual_seed(seed)
+    n = n_train + n_test
+    x = torch.randn(n, L, 4, generator=g) * 0.1
+    hist_pa = torch.where(torch.rand(n, generator=g) < 0.5, 0.85, 0.15)
+    hist_ev = torch.rand(n, L - W, generator=g) < 0.25
+    hist_a = torch.rand(n, L - W, generator=g) < hist_pa[:, None]
+    x[:, :L - W, 0] += (hist_ev & hist_a).float()
+    x[:, :L - W, 1] += (hist_ev & ~hist_a).float()
+    pos = torch.rand(n, W, generator=g).argsort(dim=1)[:, :15] + (L - W)
+    is_a = torch.rand(n, 15, generator=g) < 0.5
+    rows = torch.arange(n)[:, None].expand(-1, 15)
+    x[rows[is_a], pos[is_a], 0] += 1.0
+    x[rows[~is_a], pos[~is_a], 1] += 1.0
+    y = (is_a.sum(1) > 7).long()
+    return (TensorDataset(x[:n_train], y[:n_train]),
+            TensorDataset(x[n_train:], y[n_train:]), 4, 2)
+
+
 TASKS = {
     "ecg5000": dict(load=load_ecg5000, epochs=40, batch=32, seeds=5),
     "cue256": dict(load=lambda: make_delayed_cue(256), epochs=20, batch=64, seeds=5),
     "cue1024": dict(load=lambda: make_delayed_cue(1024, 2000, 500), epochs=20, batch=64, seeds=3),
+    "win512": dict(load=make_window_majority, epochs=20, batch=64, seeds=5),
 }
 
 BASE = dict(d_model=64, n_heads=4, d_state=16, act_bits=8)
 CONFIGS = {
-    "A0_fp32":            dict(weight_mode="fp32", use_fwht=False),
-    "A1_w8a8":            dict(weight_mode="int8", use_fwht=False),
-    "A2_tern_nofwht":     dict(weight_mode="ternary", use_fwht=False),
-    "A3_tern_hbitlinear": dict(weight_mode="ternary", use_fwht=True),
-    "A4_hwscan_fixed16":  dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="fixed16"),
-    "A5_hwscan_pot":      dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="pot"),
-    "A6_hwscan_pot0":     dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="pot0"),
-    "A7_hwscan_cpot":     dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="cpot"),
-    "A8_hwscan_cpot2":    dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="cpot2"),
+    "S0_fp32":   dict(weight_mode="fp32"),                                   # reference
+    "S1_w8a8":   dict(weight_mode="int8"),                                   # ideal scan
+    "S2_q15":    dict(weight_mode="int8", hw_scan=True, abar_mode="fixed16"),
+    "S3_pot1":   dict(weight_mode="int8", hw_scan=True, abar_mode="pot"),
+    "S4_pot0":   dict(weight_mode="int8", hw_scan=True, abar_mode="pot0"),
+    "S5_cpot":   dict(weight_mode="int8", hw_scan=True, abar_mode="cpot"),
+    "S6_cpot2":  dict(weight_mode="int8", hw_scan=True, abar_mode="cpot2"),
 }
+for _c in CONFIGS.values():
+    _c["use_fwht"] = False
 # integer (bit-exact RTL) re-evaluation of the trained model
 INT_EVAL = {
-    "A4_hwscan_fixed16": {"int_mult_q15_s32": MULT_Q15},
-    "A7_hwscan_cpot": {"int_cpot_s32_g10_round": PROPOSED_32, "int_cpot_s16_g0_trunc": LEGACY_16},
+    "S2_q15": {"int_mult_q15_s32": MULT_Q15},
+    "S5_cpot": {"int_cpot_s32_g10_round": PROPOSED_32, "int_cpot_s16_g0_trunc": LEGACY_16},
 }
 
 

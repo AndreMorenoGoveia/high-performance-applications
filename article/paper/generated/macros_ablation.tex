@@ -1,94 +1,18 @@
-\newcommand{\NParams}{68.253}
-\newcommand{\NProjParams}{66.048}
-\newcommand{\ProjRatio}{96{,}8\%}
-\newcommand{\ZeroFrac}{26{,}6\%}
-\newcommand{\ProjKiBfp}{129{,}0}
-\newcommand{\ProjKiBint}{64{,}5}
-\newcommand{\ProjKiBtwo}{16{,}1}
-\newcommand{\ProjKiBrthree}{12{,}9}
-\newcommand{\SeedsEcg}{5}
-\newcommand{\EpochsEcg}{40}
-\newcommand{\TrainEcg}{500}
-\newcommand{\TestEcg}{4.500}
-\newcommand{\SeedsCueA}{5}
-\newcommand{\EpochsCueA}{20}
-\newcommand{\TrainCueA}{4.000}
-\newcommand{\TestCueA}{1.000}
-\newcommand{\SeedsCueB}{3}
-\newcommand{\EpochsCueB}{20}
-\newcommand{\TrainCueB}{2.000}
-\newcommand{\TestCueB}{500}
-\providecommand{\acc}[2]{\csname acc@#1@#2\endcsname}
-\providecommand{\solved}[2]{\csname solved@#1@#2\endcsname}
-\expandafter\def\csname acc@ecg@A0\endcsname{92{,}7}
-\expandafter\def\csname solved@ecg@A0\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A1\endcsname{92{,}7}
-\expandafter\def\csname solved@ecg@A1\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A2\endcsname{93{,}1}
-\expandafter\def\csname solved@ecg@A2\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A3\endcsname{92{,}5}
-\expandafter\def\csname solved@ecg@A3\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A4\endcsname{92{,}7}
-\expandafter\def\csname solved@ecg@A4\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A4multq15\endcsname{92{,}7}
-\expandafter\def\csname solved@ecg@A4multq15\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A5\endcsname{91{,}7}
-\expandafter\def\csname solved@ecg@A5\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A6\endcsname{92{,}5}
-\expandafter\def\csname solved@ecg@A6\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A7\endcsname{92{,}8}
-\expandafter\def\csname solved@ecg@A7\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A7cpots32\endcsname{92{,}8}
-\expandafter\def\csname solved@ecg@A7cpots32\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A7cpots16\endcsname{92{,}8}
-\expandafter\def\csname solved@ecg@A7cpots16\endcsname{5/5}
-\expandafter\def\csname acc@ecg@A8\endcsname{92{,}7}
-\expandafter\def\csname solved@ecg@A8\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A0\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A0\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A1\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A1\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A2\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A2\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A3\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A3\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A4\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A4\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A4multq15\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A4multq15\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A5\endcsname{24{,}1}
-\expandafter\def\csname solved@cueA@A5\endcsname{0/5}
-\expandafter\def\csname acc@cueA@A6\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A6\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A7\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A7\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A7cpots32\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A7cpots32\endcsname{5/5}
-\expandafter\def\csname acc@cueA@A7cpots16\endcsname{85{,}6}
-\expandafter\def\csname solved@cueA@A7cpots16\endcsname{2/5}
-\expandafter\def\csname acc@cueA@A8\endcsname{100{,}0}
-\expandafter\def\csname solved@cueA@A8\endcsname{5/5}
-\expandafter\def\csname acc@cueB@A0\endcsname{100{,}0}
-\expandafter\def\csname solved@cueB@A0\endcsname{3/3}
-\expandafter\def\csname acc@cueB@A1\endcsname{100{,}0}
-\expandafter\def\csname solved@cueB@A1\endcsname{3/3}
-\expandafter\def\csname acc@cueB@A2\endcsname{50{,}0}
-\expandafter\def\csname solved@cueB@A2\endcsname{1/3}
-\expandafter\def\csname acc@cueB@A3\endcsname{49{,}3}
-\expandafter\def\csname solved@cueB@A3\endcsname{1/3}
-\expandafter\def\csname acc@cueB@A4\endcsname{49{,}1}
-\expandafter\def\csname solved@cueB@A4\endcsname{1/3}
-\expandafter\def\csname acc@cueB@A4multq15\endcsname{49{,}2}
-\expandafter\def\csname solved@cueB@A4multq15\endcsname{1/3}
-\expandafter\def\csname acc@cueB@A5\endcsname{21{,}9}
-\expandafter\def\csname solved@cueB@A5\endcsname{0/3}
-\expandafter\def\csname acc@cueB@A6\endcsname{100{,}0}
-\expandafter\def\csname solved@cueB@A6\endcsname{3/3}
-\expandafter\def\csname acc@cueB@A7\endcsname{39{,}0}
-\expandafter\def\csname solved@cueB@A7\endcsname{0/3}
-\expandafter\def\csname acc@cueB@A7cpots32\endcsname{39{,}3}
-\expandafter\def\csname solved@cueB@A7cpots32\endcsname{0/3}
-\expandafter\def\csname acc@cueB@A7cpots16\endcsname{24{,}1}
-\expandafter\def\csname solved@cueB@A7cpots16\endcsname{0/3}
-\expandafter\def\csname acc@cueB@A8\endcsname{39{,}4}
-\expandafter\def\csname solved@cueB@A8\endcsname{0/3}
+\newcommand{\NParams}{\textbf{??}}
+\newcommand{\SeedsEcg}{\textbf{??}}
+\newcommand{\SeedsCueA}{\textbf{??}}
+\newcommand{\SeedsCueB}{\textbf{??}}
+\newcommand{\SeedsWin}{\textbf{??}}
+\newcommand{\EpochsEcg}{\textbf{??}}
+\newcommand{\EpochsCueA}{\textbf{??}}
+\newcommand{\EpochsCueB}{\textbf{??}}
+\newcommand{\EpochsWin}{\textbf{??}}
+\newcommand{\TrainEcg}{\textbf{??}}
+\newcommand{\TrainCueA}{\textbf{??}}
+\newcommand{\TrainCueB}{\textbf{??}}
+\newcommand{\TrainWin}{\textbf{??}}
+\newcommand{\TestEcg}{\textbf{??}}
+\newcommand{\TestCueA}{\textbf{??}}
+\newcommand{\TestCueB}{\textbf{??}}
+\newcommand{\TestWin}{\textbf{??}}
+\providecommand{\acc}[2]{\textbf{??}}\providecommand{\solved}[2]{\textbf{??}}

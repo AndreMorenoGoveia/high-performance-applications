@@ -64,19 +64,16 @@ def style(ax):
 
 def verification_table():
     v = load("rtl_verification.json")
-    rows = []
-    groups = {"radix3": "Decodificador Radix-3 (exaustivo, 256 códigos)",
-              "fwht16": "FWHT 16 pontos (vetores aleatórios + extremos)",
-              "engine": "Motor matriz-vetor (INT8/2-bit/Radix-3, $P\\in\\{16,32,64\\}$)",
-              "scan": "Lane de \\emph{scan} (CPoT 32b, CPoT 16b legado, Q1.15)"}
-    for key, label in groups.items():
-        ts = [t for t in v["tests"] if t["test"].startswith(key)]
-        rows.append(f"{label} & {len(ts)} & {thousands(sum(t['checked'] for t in ts))} & "
-                    f"{sum(t['mismatches'] for t in ts)} \\\\")
-    rows.append("\\midrule")
-    rows.append(f"\\textbf{{Total}} & {len(v['tests'])} & \\textbf{{{thousands(v['total_checked'])}}} & "
-                f"\\textbf{{{v['total_mismatches']}}} \\\\")
+    lab = {"scan_cpot_s32_g10_round": "CPoT, 32 bits, 10 bits de guarda, arredondamento (proposta)",
+           "scan_cpot_s16_g0_trunc": "CPoT, 16 bits, truncamento (legado)",
+           "scan_mult_q15_s32_g10": "Multiplicador Q1.15, 32 bits (baseline)"}
+    by = {t["test"]: t for t in v["tests"]}
+    rows = [f"{l} & {thousands(by[n]['checked'])} & {by[n]['mismatches']} \\\\" for n, l in lab.items()]
+    tot = sum(by[n]["checked"] for n in lab)
+    mis = sum(by[n]["mismatches"] for n in lab)
+    rows += ["\\midrule", f"\\textbf{{Total}} & \\textbf{{{thousands(tot)}}} & \\textbf{{{mis}}} \\\\"]
     write("tab_verification.tex", "\n".join(rows) + "\n\\bottomrule\n")
+    return tot, mis
 
 
 def abar_table():
@@ -149,25 +146,26 @@ def long_range_figure():
 
 
 ABL_LABEL = {
-    "A0_fp32": "A0 & FP32 (referência) & FP32 & --- & float exato",
-    "A1_w8a8": "A1 & W8A8 & INT8 & não & float exato",
-    "A2_tern_nofwht": "A2 & Ternário & 1,58b & não & float exato",
-    "A3_tern_hbitlinear": "A3 & + H-BitLinear & 1,58b & sim & float exato",
-    "A4_hwscan_fixed16": "A4 & + \\emph{scan} HW & 1,58b & sim & Q1.15 (mult.)",
-    "A5_hwscan_pot": "A5 & + \\emph{scan} HW & 1,58b & sim & PoT, $k\\geq1$",
-    "A6_hwscan_pot0": "A6 & + \\emph{scan} HW & 1,58b & sim & PoT, $k\\geq0$",
-    "A7_hwscan_cpot": "\\textbf{A7} & \\textbf{+ \\emph{scan} HW} & 1,58b & sim & \\textbf{CPoT}",
-    "A8_hwscan_cpot2": "A8 & + \\emph{scan} HW & 1,58b & sim & CPoT-2 (só SW)",
+    "S0_fp32": "S0 & FP32 (referência) & FP32 & float exato",
+    "S1_w8a8": "S1 & W8A8, \\emph{scan} ideal & INT8 & float exato",
+    "S2_q15": "S2 & \\emph{scan} HW & INT8 & Q1.15 (mult.)",
+    "S3_pot1": "S3 & \\emph{scan} HW & INT8 & PoT, $k\\geq1$",
+    "S4_pot0": "S4 & \\emph{scan} HW & INT8 & PoT, $k\\geq0$",
+    "S5_cpot": "\\textbf{S5} & \\textbf{\\emph{scan} HW} & INT8 & \\textbf{CPoT}",
+    "S6_cpot2": "S6 & \\emph{scan} HW & INT8 & CPoT-2 (só SW)",
 }
 INT_LABEL = {
-    "int_mult_q15_s32": "A4$^\\dagger$ & \\multicolumn{3}{l}{A4 avaliado com \\emph{scan} inteiro bit-exato} & Q1.15, 32b",
-    "int_cpot_s32_g10_round": "\\textbf{A7$^\\dagger$} & \\multicolumn{3}{l}{\\textbf{A7 avaliado com \\emph{scan} inteiro bit-exato}} & \\textbf{CPoT, 32b}",
-    "int_cpot_s16_g0_trunc": "A7$^\\ddagger$ & \\multicolumn{3}{l}{A7 com estado legado (16b, trunc.)} & CPoT, 16b",
+    "int_mult_q15_s32": "S2$^\\dagger$ & \\multicolumn{2}{l}{S2 com \\emph{scan} inteiro bit-exato} & Q1.15, 32b",
+    "int_cpot_s32_g10_round": "\\textbf{S5$^\\dagger$} & \\multicolumn{2}{l}{\\textbf{S5 com \\emph{scan} inteiro bit-exato}} & \\textbf{CPoT, 32b}",
+    "int_cpot_s16_g0_trunc": "S5$^\\ddagger$ & \\multicolumn{2}{l}{S5 com estado legado (16b, trunc.)} & CPoT, 16b",
 }
+TASK_ORDER = ("ecg5000", "cue256", "cue1024", "win512")
+SHORT = {"ecg5000": "ecg", "cue256": "cueA", "cue1024": "cueB", "win512": "win"}
+TAG = {"ecg5000": "Ecg", "cue256": "CueA", "cue1024": "CueB", "win512": "Win"}
 
 
 def ablation_table():
-    tasks = [t for t in ("ecg5000", "cue256", "cue1024") if load(f"ablation_{t}.json")]
+    tasks = [t for t in TASK_ORDER if load(f"ablation_{t}.json")]
     data = {t: load(f"ablation_{t}.json") for t in tasks}
     cell = lambda vals: f"${br(np.mean(vals), 1)} \\pm {br(np.std(vals), 1)}$"
     rows = []
@@ -179,10 +177,10 @@ def ablation_table():
             if t == "ecg5000":
                 cs.append(cell(c["bal_acc"]) if c else "---")
         rows.append(label + " & " + " & ".join(cs) + " \\\\")
-        if name == "A8_hwscan_cpot2":
+        if name == "S6_cpot2":
             rows.append("\\midrule")
-    for parent, ints in (("A4_hwscan_fixed16", ["int_mult_q15_s32"]),
-                         ("A7_hwscan_cpot", ["int_cpot_s32_g10_round", "int_cpot_s16_g0_trunc"])):
+    for parent, ints in (("S2_q15", ["int_mult_q15_s32"]),
+                         ("S5_cpot", ["int_cpot_s32_g10_round", "int_cpot_s16_g0_trunc"])):
         for iname in ints:
             cs = []
             for t in tasks:
@@ -193,13 +191,14 @@ def ablation_table():
             rows.append(INT_LABEL[iname] + " & " + " & ".join(cs) + " \\\\")
     body = "\n".join(rows) + "\n"
 
-    head = {"ecg5000": "\\multicolumn{2}{c}{ECG5000 ($L=140$)}", "cue256": "Cue $L=256$", "cue1024": "Cue $L=1024$"}
-    sub = {"ecg5000": "Acur. & Acur. bal.", "cue256": "Acur.", "cue1024": "Acur."}
+    head = {"ecg5000": "\\multicolumn{2}{c}{ECG5000 ($L=140$)}", "cue256": "Record. $L=256$",
+            "cue1024": "Record. $L=1024$", "win512": "Janela $L=512$"}
+    sub = {"ecg5000": "Acur. & Acur. bal.", "cue256": "Acur.", "cue1024": "Acur.", "win512": "Acur."}
     ncols = sum(2 if t == "ecg5000" else 1 for t in tasks)
     write("tab_ablation.tex",
-          f"\\begin{{tabular}}{{lllll{'c' * ncols}}}\n\\toprule\n"
-          f" & & & & & {' & '.join(head[t] for t in tasks)} \\\\\n"
-          f"ID & Configuração & Pesos & FWHT & $\\bar{{A}}_t$ & {' & '.join(sub[t] for t in tasks)} \\\\\n\\midrule\n"
+          f"\\begin{{tabular}}{{llll{'c' * ncols}}}\n\\toprule\n"
+          f" & & & & {' & '.join(head[t] for t in tasks)} \\\\\n"
+          f"ID & Configuração & Projeções & $\\bar{{A}}_t$ & {' & '.join(sub[t] for t in tasks)} \\\\\n\\midrule\n"
           + body + "\\bottomrule\n\\end{tabular}\n")
     meta = []
     for t in tasks:
@@ -208,32 +207,21 @@ def ablation_table():
                     f"épocas={d['epochs']}, seeds={len(d['seeds'])}")
     write("ablation_meta.tex", "% " + " | ".join(meta) + "\n")
 
-    # model facts used in the text
-    any_t = data[tasks[0]]["configs"]["A7_hwscan_cpot"]
-    s = any_t["summary"]
-    zeros = [z for t in tasks for z in data[t]["configs"]["A7_hwscan_cpot"]["zero_frac"]]
-    macros = {
-        "NParams": thousands(s["total_params"]),
-        "NProjParams": thousands(s["projection_params"]),
-        "ProjRatio": br(100 * s["projection_ratio"], 1) + "\\%",
-        "ZeroFrac": br(100 * np.mean(zeros), 1) + "\\%",
-        "ProjKiBfp": br(s["proj_kib_fp16"], 1), "ProjKiBint": br(s["proj_kib_int8"], 1),
-        "ProjKiBtwo": br(s["proj_kib_2bit"], 1), "ProjKiBrthree": br(s["proj_kib_radix3"], 1),
-    }
-    for tag in ("Ecg", "CueA", "CueB"):            # missing tasks stay visibly pending
+    s = data[tasks[0]]["configs"]["S5_cpot"]["summary"]
+    macros = {"NParams": thousands(s["total_params"])}
+    for t in TASK_ORDER:                            # missing tasks stay visibly pending
         for a_ in ("Seeds", "Epochs", "Train", "Test"):
-            macros[f"{a_}{tag}"] = "\\textbf{??}"
+            macros[f"{a_}{TAG[t]}"] = "\\textbf{??}"
     for t in tasks:
         d = data[t]
-        tag = {"ecg5000": "Ecg", "cue256": "CueA", "cue1024": "CueB"}[t]
-        macros[f"Seeds{tag}"] = str(len(d["seeds"]))
-        macros[f"Epochs{tag}"] = str(d["epochs"])
-        macros[f"Train{tag}"] = thousands(d["n_train"])
-        macros[f"Test{tag}"] = thousands(d["n_test"])
+        macros[f"Seeds{TAG[t]}"] = str(len(d["seeds"]))
+        macros[f"Epochs{TAG[t]}"] = str(d["epochs"])
+        macros[f"Train{TAG[t]}"] = thousands(d["n_train"])
+        macros[f"Test{TAG[t]}"] = thousands(d["n_test"])
     # per task/config results: \acc{task}{id}, \solved{task}{id} (seeds with acc > 90%)
     lines = ["\\providecommand{\\acc}[2]{\\csname acc@#1@#2\\endcsname}",
              "\\providecommand{\\solved}[2]{\\csname solved@#1@#2\\endcsname}"]
-    short = {"ecg5000": "ecg", "cue256": "cueA", "cue1024": "cueB"}
+    short = SHORT
     for t in tasks:
         for name, c in data[t]["configs"].items():
             cid = name.split("_")[0]
@@ -247,41 +235,28 @@ def ablation_table():
           + "\n".join(lines) + "\n")
 
 
-def yosys_table():
-    y = load("yosys_dse.json")
-    by = {r["name"]: r for r in y["results"]}
-    enc = {0: "INT8 (DSP)", 1: "Ternário 2-bit", 2: "Ternário Radix-3"}
-    rows = []
-    for e in (0, 1, 2):
-        for p in (16, 32, 64):
-            r = by[f"engine_ENC{e}_P{p}"]
-            rows.append(f"{enc[e] if p == 16 else ''} & {p} & {br(r['bits_per_weight'], 2)} & "
-                        f"{thousands(r['luts'])} & {thousands(r['carry_cells'])} & {thousands(r['ffs'])} & "
-                        f"{r['m10k']} & {r['mul9x9']} & {thousands(r['cycles_per_matvec'])} \\\\")
-        if e < 2:
-            rows.append("\\midrule")
-    write("tab_yosys_engine.tex", "\n".join(rows) + "\n\\bottomrule\n")
-    lab = {"scan_cpot_s32_g10_round": "CPoT, 32b + guarda (proposto)",
-           "scan_cpot_s16_g0_trunc": "CPoT, 16b (legado, incorreto)",
-           "scan_mult_q15_s32_g10": "Multiplicador Q1.15, 32b",
-           "fwht16": "FWHT 16 pontos", "radix3_decoder": "Decodificador Radix-3 (1 byte)"}
-    rows = []
-    for n, l in lab.items():
-        r = by[n]
-        rows.append(f"{l} & {thousands(r['luts'])} & {thousands(r['carry_cells'])} & {thousands(r['ffs'])} & "
-                    f"{r['mul9x9']} & {r['mul18x18']} & {r['mul27x27']} & {r['dsp_blocks_est']} \\\\")
-    write("tab_yosys_blocks.tex", "\n".join(rows) + "\n\\bottomrule\n")
-    write("macros_yosys.tex", f"\\newcommand{{\\YosysVersion}}{{{y['tool'].split('(')[0].strip()}}}\n"
-                              f"\\newcommand{{\\EngK}}{{{y['engine_K']}}}\n\\newcommand{{\\EngM}}{{{y['engine_M']}}}\n")
+SCAN_HW = {"scan_cpot_s32_g10_round": "CPoT, 32b + guarda (proposta)",
+           "scan_cpot_s16_g0_trunc": "CPoT, 16b, trunc. (legado, incorreto)",
+           "scan_mult_q15_s32_g10": "Multiplicador Q1.15, 32b (baseline)"}
 
 
-def number_macros():
-    v, r, y = load("rtl_verification.json"), load("long_range_results.json"), load("yosys_dse.json")
-    by = {x["name"]: x for x in y["results"]}
+def quartus_table():
+    q = load("quartus_dse.json")
+    by = {r["name"]: r for r in q["results"]}
+    rows = [f"{l} & {thousands(by[n]['alms'])} & {thousands(by[n]['registers'])} & {by[n]['dsp_blocks']} & "
+            f"{br(by[n]['fmax_mhz_slow100'], 1)} \\\\" for n, l in SCAN_HW.items()]
+    write("tab_quartus.tex", "\n".join(rows) + "\n\\bottomrule\n")
+    ver = q["tool"][1].split("Build")[0].replace("Version", "").strip()
+    write("macros_quartus.tex", f"\\newcommand{{\\QuartusVersion}}{{Quartus Prime Lite {ver}}}\n")
+    return by
+
+
+def number_macros(ver_tot, ver_mis, qby):
+    r = load("long_range_results.json")
     e1, e3, e4 = r["E1_grid_0.90_0.999"], r["E3_integer_impulse"], r["E4_integer_random_sqnr"]
+    c, m_ = qby["scan_cpot_s32_g10_round"], qby["scan_mult_q15_s32_g10"]
     m = {
-        "VerTests": str(len(v["tests"])), "VerTotal": thousands(v["total_checked"]),
-        "VerMism": str(v["total_mismatches"]),
+        "VerTests": "3", "VerTotal": thousands(ver_tot), "VerMism": str(ver_mis),
         "SqnrLegacy": br(e4["legacy_s16_g0_trunc"]["sqnr_mean_db"], 1),
         "SqnrProposed": br(e4["proposed_s32_g10_round"]["sqnr_mean_db"], 1),
         "SqnrMult": br(e4["mult_q15_s32_g10"]["sqnr_mean_db"], 1),
@@ -291,33 +266,25 @@ def number_macros():
         "TauErrCpotTwo": br(100 * e1["cpot2"]["tau_rel_err_median"], 1) + "\\%",
         "TauErrPot": br(100 * e1["pot"]["tau_rel_err_median"], 1) + "\\%",
         "LevelsCpot": str(e1["cpot"]["distinct_levels"]),
-        "DspCpot": str(by["scan_cpot_s32_g10_round"]["dsp_blocks_est"]),
-        "DspMult": str(by["scan_mult_q15_s32_g10"]["dsp_blocks_est"]),
-        "LutCpot": thousands(by["scan_cpot_s32_g10_round"]["luts"]),
-        "LutMult": thousands(by["scan_mult_q15_s32_g10"]["luts"]),
-        "LutDec": str(by["radix3_decoder"]["luts"]),
+        "DspCpot": str(c["dsp_blocks"]), "DspMult": str(m_["dsp_blocks"]),
+        "AlmCpot": thousands(c["alms"]), "AlmMult": thousands(m_["alms"]),
+        "FmaxCpot": br(c["fmax_mhz_slow100"], 1), "FmaxMult": br(m_["fmax_mhz_slow100"], 1),
+        "DspSaving": br(100 * (1 - c["dsp_blocks"] / m_["dsp_blocks"]), 0) + "\\%",
+        "LanesCpot": str(112 // c["dsp_blocks"]), "LanesMult": str(112 // m_["dsp_blocks"]),
     }
-    for p_ in (16, 64):
-        for e, tag in ((0, "Int"), (1, "Two"), (2, "Rthree")):
-            x = by[f"engine_ENC{e}_P{p_}"]
-            sfx = {16: "A", 64: "C"}[p_]
-            m[f"Mtenk{tag}{sfx}"] = str(x["m10k"])
-            m[f"Lut{tag}{sfx}"] = thousands(x["luts"])
-            m[f"Mul{tag}{sfx}"] = str(x["mul9x9"])
     write("macros_numbers.tex", "".join(f"\\newcommand{{\\{k}}}{{{val}}}\n" for k, val in m.items()))
 
 
 if __name__ == "__main__":
-    number_macros()
-    verification_table()
+    tot, mis = verification_table()
     abar_table()
     long_range_figure()
-    yosys_table()
-    if any(load(f"ablation_{t}.json") for t in ("ecg5000", "cue256", "cue1024")):
+    number_macros(tot, mis, quartus_table())
+    if any(load(f"ablation_{t}.json") for t in TASK_ORDER):
         ablation_table()
     else:   # placeholders so the paper still compiles; visibly marked as missing
         print("  (no ablation results yet -> placeholders)")
-        keys = ["NParams", "NProjParams", "ProjRatio", "ZeroFrac", "ProjKiBfp", "ProjKiBint", "ProjKiBtwo",
-                "ProjKiBrthree"] + [f"{a}{t}" for a in ("Seeds", "Epochs", "Train", "Test") for t in ("Ecg", "CueA", "CueB")]
-        write("macros_ablation.tex", "".join(f"\\newcommand{{\\{k}}}{{\\textbf{{??}}}}\n" for k in keys))
+        keys = ["NParams"] + [f"{a}{TAG[t]}" for a in ("Seeds", "Epochs", "Train", "Test") for t in TASK_ORDER]
+        write("macros_ablation.tex", "".join(f"\\newcommand{{\\{k}}}{{\\textbf{{??}}}}\n" for k in keys)
+              + "\\providecommand{\\acc}[2]{\\textbf{??}}\\providecommand{\\solved}[2]{\\textbf{??}}\n")
         write("tab_ablation.tex", "\\begin{tabular}{c}\\toprule\n\\textbf{resultados pendentes} \\\\\n\\bottomrule\n\\end{tabular}\n")

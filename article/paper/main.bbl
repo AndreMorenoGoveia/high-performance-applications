@@ -52,18 +52,6 @@ Jinhao Li, Shan Huang, Jiaming Xu, Jun Liu, Li~Ding, Ningyi Xu, and Guohao Dai.
 \newblock In {\em IEEE/ACM International Conference on Computer-Aided Design
   (ICCAD)}, 2024.
 
-\bibitem{ma2024era}
-Shuming Ma, Hongyu Wang, Lingxiao Ma, Lei Wang, Wenhui Wang, Shaohan Huang,
-  Li~Dong, Ruiping Wang, Jilong Xue, and Furu Wei.
-\newblock The era of 1-bit {LLMs}: All large language models are in 1.58 bits.
-\newblock {\em arXiv preprint arXiv:2402.17764}, 2024.
-
-\bibitem{qiao2025tellme}
-Ye~Qiao et~al.
-\newblock {TeLLMe}: An energy-efficient ternary {LLM} accelerator for
-  prefilling and decoding on edge {FPGAs}.
-\newblock {\em arXiv preprint arXiv:2504.16266}, 2025.
-
 \bibitem{tang2024bimamba}
 Shengkun Tang, Liqun Ma, Haonan Li, Mingjie Sun, and Zhiqiang Shen.
 \newblock {Bi-Mamba}: Towards accurate 1-bit state space models.
@@ -76,20 +64,6 @@ Aotao Wang, Haikuo Shao, Shaobo Ma, and Zhongfeng Wang.
   with accurate quantization.
 \newblock {\em arXiv preprint arXiv:2505.18975}, 2025.
 
-\bibitem{wang2025bitnetv2}
-Hongyu Wang, Shuming Ma, and Furu Wei.
-\newblock {BitNet v2}: Native 4-bit activations with {Hadamard} transformation
-  for 1-bit {LLMs}.
-\newblock {\em arXiv preprint arXiv:2504.18415}, 2025.
-
-\bibitem{wei2024tmac}
-Jianyu Wei, Shijie Cao, Ting Cao, Lingxiao Ma, Lei Wang, Yanyong Zhang, and Mao
-  Yang.
-\newblock {T-MAC}: {CPU} renaissance via table lookup for low-bit {LLM}
-  deployment on edge.
-\newblock In {\em European Conference on Computer Systems (EuroSys)}, 2025.
-\newblock arXiv:2407.00088.
-
 \bibitem{wei2025lightmamba}
 Renjie Wei, Songqiang Xu, Linfeng Zhong, Zebin Yang, Qingyu Guo, Yuan Wang,
   Runsheng Wang, and Meng Li.
@@ -97,17 +71,6 @@ Renjie Wei, Songqiang Xu, Linfeng Zhong, Zebin Yang, Qingyu Guo, Yuan Wang,
   quantization and hardware co-design.
 \newblock In {\em Design, Automation and Test in Europe (DATE)}, 2025.
 \newblock arXiv:2502.15260.
-
-\bibitem{yosys}
-Claire Wolf.
-\newblock Yosys open synthesis suite.
-\newblock \url{https://yosyshq.net/yosys/}, 2023.
-
-\bibitem{yin2025tereffic}
-Chenyang Yin, Zhenyu Bai, Pranav Venkatram, Shivam Aggarwal, Zhaoying Li, and
-  Tulika Mitra.
-\newblock {TerEffic}: Highly efficient ternary {LLM} inference on {FPGA}.
-\newblock {\em arXiv preprint arXiv:2502.16473}, 2025.
 
 \bibitem{yu2025slendermamba}
 Zhenxuan Yu, Takeshi Kojima, Yutaka Matsuo, and Yusuke Iwasawa.

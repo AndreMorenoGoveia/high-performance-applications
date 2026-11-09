@@ -8,6 +8,150 @@
   "clock_constraint_mhz": 200,
   "results": [
     {
+      "name": "engine_ENC0_P16",
+      "params": {
+        "P": 16,
+        "K": 256,
+        "M": 512,
+        "ENC": 0
+      },
+      "alms": 1212,
+      "registers": 2497,
+      "block_memory_bits": 1048576,
+      "m10k": 128,
+      "dsp_blocks": 8,
+      "fmax_mhz_slow100": 133.69,
+      "restricted_fmax_mhz_slow100": 133.69
+    },
+    {
+      "name": "engine_ENC0_P32",
+      "params": {
+        "P": 32,
+        "K": 256,
+        "M": 512,
+        "ENC": 0
+      },
+      "alms": 1405,
+      "registers": 3137,
+      "block_memory_bits": 1048576,
+      "m10k": 128,
+      "dsp_blocks": 16,
+      "fmax_mhz_slow100": 135.08,
+      "restricted_fmax_mhz_slow100": 135.08
+    },
+    {
+      "name": "engine_ENC0_P64",
+      "params": {
+        "P": 64,
+        "K": 256,
+        "M": 512,
+        "ENC": 0
+      },
+      "alms": 1628,
+      "registers": 3651,
+      "block_memory_bits": 1048576,
+      "m10k": 103,
+      "dsp_blocks": 32,
+      "fmax_mhz_slow100": 134.99,
+      "restricted_fmax_mhz_slow100": 134.99
+    },
+    {
+      "name": "engine_ENC1_P16",
+      "params": {
+        "P": 16,
+        "K": 256,
+        "M": 512,
+        "ENC": 1
+      },
+      "alms": 1335,
+      "registers": 2656,
+      "block_memory_bits": 262144,
+      "m10k": 32,
+      "dsp_blocks": 0,
+      "fmax_mhz_slow100": 211.73,
+      "restricted_fmax_mhz_slow100": 211.73
+    },
+    {
+      "name": "engine_ENC1_P32",
+      "params": {
+        "P": 32,
+        "K": 256,
+        "M": 512,
+        "ENC": 1
+      },
+      "alms": 1576,
+      "registers": 3207,
+      "block_memory_bits": 262144,
+      "m10k": 32,
+      "dsp_blocks": 0,
+      "fmax_mhz_slow100": 212.59,
+      "restricted_fmax_mhz_slow100": 212.59
+    },
+    {
+      "name": "engine_ENC1_P64",
+      "params": {
+        "P": 64,
+        "K": 256,
+        "M": 512,
+        "ENC": 1
+      },
+      "alms": 2118,
+      "registers": 4291,
+      "block_memory_bits": 262144,
+      "m10k": 26,
+      "dsp_blocks": 0,
+      "fmax_mhz_slow100": 208.86,
+      "restricted_fmax_mhz_slow100": 208.86
+    },
+    {
+      "name": "engine_ENC2_P16",
+      "params": {
+        "P": 16,
+        "K": 256,
+        "M": 512,
+        "ENC": 2
+      },
+      "alms": 1856,
+      "registers": 2728,
+      "block_memory_bits": 209792,
+      "m10k": 26,
+      "dsp_blocks": 0,
+      "fmax_mhz_slow100": 146.93,
+      "restricted_fmax_mhz_slow100": 146.93
+    },
+    {
+      "name": "engine_ENC2_P32",
+      "params": {
+        "P": 32,
+        "K": 256,
+        "M": 512,
+        "ENC": 2
+      },
+      "alms": 2735,
+      "registers": 3384,
+      "block_memory_bits": 209920,
+      "m10k": 26,
+      "dsp_blocks": 0,
+      "fmax_mhz_slow100": 127.71,
+      "restricted_fmax_mhz_slow100": 127.71
+    },
+    {
+      "name": "engine_ENC2_P64",
+      "params": {
+        "P": 64,
+        "K": 256,
+        "M": 512,
+        "ENC": 2
+      },
+      "alms": 4735,
+      "registers": 4429,
+      "block_memory_bits": 209920,
+      "m10k": 26,
+      "dsp_blocks": 0,
+      "fmax_mhz_slow100": 135.59,
+      "restricted_fmax_mhz_slow100": 135.59
+    },
+    {
       "name": "scan_cpot_s32_g10_round",
       "params": {
         "N": 16,
@@ -16,13 +160,69 @@
         "ROUND": 1,
         "DECAY": 0
       },
-      "alms": 3308,
-      "registers": 1420,
+      "alms": 3299,
+      "registers": 1432,
       "block_memory_bits": 0,
       "m10k": 0,
       "dsp_blocks": 48,
-      "fmax_mhz_slow85": 69.07,
-      "restricted_fmax_mhz_slow85": 69.07
+      "fmax_mhz_slow100": 68.67,
+      "restricted_fmax_mhz_slow100": 68.67
+    },
+    {
+      "name": "scan_cpot_s16_g0_trunc",
+      "params": {
+        "N": 16,
+        "STATE_W": 16,
+        "GUARD": 0,
+        "ROUND": 0,
+        "DECAY": 0
+      },
+      "alms": 1513,
+      "registers": 1250,
+      "block_memory_bits": 0,
+      "m10k": 0,
+      "dsp_blocks": 24,
+      "fmax_mhz_slow100": 102.51,
+      "restricted_fmax_mhz_slow100": 102.51
+    },
+    {
+      "name": "scan_mult_q15_s32_g10",
+      "params": {
+        "N": 16,
+        "STATE_W": 32,
+        "GUARD": 10,
+        "ROUND": 1,
+        "DECAY": 1
+      },
+      "alms": 1873,
+      "registers": 1712,
+      "block_memory_bits": 0,
+      "m10k": 0,
+      "dsp_blocks": 80,
+      "fmax_mhz_slow100": 64.16,
+      "restricted_fmax_mhz_slow100": 64.16
+    },
+    {
+      "name": "fwht16",
+      "params": {},
+      "alms": 498,
+      "registers": 723,
+      "block_memory_bits": 0,
+      "m10k": 0,
+      "dsp_blocks": 0,
+      "fmax_mhz_slow100": 245.04,
+      "restricted_fmax_mhz_slow100": 245.04
+    },
+    {
+      "name": "radix3_decoder",
+      "params": {},
+      "alms": 48,
+      "registers": 0,
+      "block_memory_bits": 0,
+      "m10k": 0,
+      "dsp_blocks": 0,
+      "fmax_mhz_slow100": null,
+      "restricted_fmax_mhz_slow100": null
     }
   ]
 }

@@ -12,21 +12,25 @@
 \usepackage{caption}
 \usepackage{xcolor}
 \usepackage{url}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
 \usepackage[hidelinks]{hyperref}
 
 \graphicspath{{./figures/}}
 
 % Todos os números de resultados vêm de sw/results/*.json via sw/make_paper_assets.py
 \input{generated/macros_numbers.tex}
-\input{generated/macros_yosys.tex}
+\input{generated/macros_quartus.tex}
 \input{generated/macros_ablation.tex}
 
-\title{BitMamba-CV: Co-Projeto Hardware-Algoritmo de Modelos Mamba-2 Tern\'{a}rios com Discretiza\c{c}\~{a}o CPoT para FPGA de Borda}
+\newenvironment{exemplo}[1]{\par\smallskip\noindent\textbf{Exemplo (#1).}\ \itshape}{\par\smallskip}
+
+\title{Decaimento sem Multiplicador e Precisão de Estado para o \emph{Scan} Seletivo do Mamba-2 em Hardware}
 
 % TODO: completar afiliação e e-mail institucional
-\author{Andr\'{e} Goveia\inst{1}}
+\author{André Goveia\inst{1}}
 
-\address{Programa de P\'{o}s-Gradua\c{c}\~{a}o -- Aplica\c{c}\~{o}es de Alto Desempenho\\
+\address{Programa de Pós-Graduação -- Aplicações de Alto Desempenho\\
   \email{andre@instituicao.edu.br}
 }
 
@@ -36,51 +40,83 @@
 \maketitle
 
 \begin{abstract}
-State space models (Mamba-2) keep a constant-size recurrent state, which makes them attractive for low-cost FPGAs, but their decay factor $\bar{A}_t$ lives close to $1$ and is fragile under shift-only arithmetic. We present \textbf{BitMamba-CV}, a co-design of 1.58-bit ternary Mamba-2 and a multiplier-free selective-scan datapath for the Intel Cyclone~V. We (i) train ternary projections in the Hadamard domain (\texttt{H-BitLinear}) together with an integer-compatible scan (static power-of-two scales, power-of-two $\Delta_t$); (ii) propose the \emph{Complementary Power-of-Two} (CPoT, $\{2^{-k}, 1-2^{-k}\}$) discretisation of $\bar{A}_t$, implemented with one shift and one subtraction; and (iii) show that CPoT is only correct with enough state precision: a 16-bit truncating state freezes long-memory channels (integer datapath SQNR \SqnrLegacy~dB), while a 32-bit state with 10 guard bits and rounding reaches \SqnrProposed~dB, matching a Q1.15 multiplier (\SqnrMult~dB) with fewer DSP blocks; on a delayed-recall task ($L=256$) the same trained model drops from \acc{cueA}{A7cpots32}\% to \acc{cueA}{A7cpots16}\% with the 16-bit state. Ternary models with the integer scan keep FP32 accuracy on ECG5000 and on recall with $L=256$, but ternary training does not converge for most seeds at $L=1024$. All RTL modules are verified bit-exactly against an integer golden model (\VerTotal{} vectors, \VerMism{} mismatches) and characterised with open-source synthesis for Cyclone~V. Timing closure, on-board latency and power are left to the hardware phase and are not claimed here.
+Language and signal models based on the Transformer must keep every past input, so their memory grows with the input length. State space models such as Mamba-2 keep a fixed-size summary of the past instead, updated at every step like a bank of first-order recursive (IIR) filters whose coefficients depend on the input. This update, the \emph{selective scan}, is the part of the model that hardware must run step by step, and it multiplies every state element by a decay coefficient at every step. The coefficients that give the model long memory sit very close to 1, where cheap shift-only arithmetic fails, and short fixed-point state registers stop decaying, an effect analogous to the dead band of fixed-point IIR filters. This paper asks whether the decay multiplier can be removed without losing accuracy, and how much state precision is needed. We propose the \emph{Complementary Power-of-Two} (CPoT) coefficient $\{2^{-k}, 1-2^{-k}\}$, applied with one shift and one subtraction, and quantify the state precision it requires. A 16-bit truncating state reaches only \SqnrLegacy~dB of datapath SQNR, while a 32-bit state with 10 guard bits and rounding reaches \SqnrProposed~dB, on par with a Q1.15 multiplier (\SqnrMult~dB). Models trained with the integer CPoT scan are compared against FP32, a multiplier baseline and plain power-of-two decay on ECG5000 and on synthetic memory tasks. On an Intel Cyclone~V, used as a measurement vehicle, the CPoT scan lane uses \DspCpot{} DSP blocks instead of \DspMult{} for the same throughput, at the cost of more logic. The RTL is checked bit-exactly against an integer reference model (\VerTotal{} outputs, \VerMism{} mismatches).
 \end{abstract}
 
 \begin{resumo}
-Modelos de espa\c{c}o de estados (Mamba-2) mant\^{e}m um estado recorrente de tamanho constante, o que os torna atrativos para FPGAs de baixo custo, mas o fator de decaimento $\bar{A}_t$ opera pr\'{o}ximo de $1$ e \'{e} fr\'{a}gil sob aritm\'{e}tica apenas com deslocamentos. Apresentamos o \textbf{BitMamba-CV}, um co-projeto de Mamba-2 tern\'{a}rio (1,58 bit) e de um \emph{datapath} de \emph{scan} seletivo sem multiplicador no decaimento para a Intel Cyclone~V. N\'{o}s (i) treinamos proje\c{c}\~{o}es tern\'{a}rias no dom\'{\i}nio de Hadamard (\texttt{H-BitLinear}) junto com um \emph{scan} compat\'{\i}vel com aritm\'{e}tica inteira (escalas est\'{a}ticas em pot\^{e}ncia de dois e $\Delta_t$ em pot\^{e}ncia de dois); (ii) propomos a discretiza\c{c}\~{a}o \emph{Complementary Power-of-Two} (CPoT, $\{2^{-k}, 1-2^{-k}\}$) de $\bar{A}_t$, implementada com um deslocamento e uma subtra\c{c}\~{a}o; e (iii) mostramos que o CPoT s\'{o} \'{e} correto com precis\~{a}o de estado suficiente: um estado de 16 bits com truncamento congela os canais de mem\'{o}ria longa (SQNR do \emph{datapath} inteiro de \SqnrLegacy~dB), enquanto um estado de 32 bits com 10 bits de guarda e arredondamento atinge \SqnrProposed~dB, equivalente a um multiplicador Q1.15 (\SqnrMult~dB) com menos blocos DSP; numa tarefa de recorda\c{c}\~{a}o com $L=256$, o mesmo modelo treinado cai de \acc{cueA}{A7cpots32}\% para \acc{cueA}{A7cpots16}\% com o estado de 16 bits. Modelos tern\'{a}rios com \emph{scan} inteiro mant\^{e}m a acur\'{a}cia FP32 no ECG5000 e na recorda\c{c}\~{a}o com $L=256$, mas o treinamento tern\'{a}rio n\~{a}o converge na maioria das sementes com $L=1024$. Todos os m\'{o}dulos RTL foram verificados bit a bit contra um modelo de refer\^{e}ncia inteiro (\VerTotal{} vetores, \VerMism{} diverg\^{e}ncias) e caracterizados com s\'{\i}ntese de c\'{o}digo aberto para Cyclone~V. Fechamento de \emph{timing}, lat\^{e}ncia em placa e pot\^{e}ncia ficam para a fase de hardware e n\~{a}o s\~{a}o reivindicados aqui.
+Modelos de linguagem e de sinais baseados no Transformer precisam guardar todas as entradas passadas, e sua memória cresce com o comprimento da entrada. Modelos de espaço de estados como o Mamba-2 guardam um resumo de tamanho fixo do passado, atualizado a cada passo como um banco de filtros recursivos (IIR) de primeira ordem cujos coeficientes dependem da entrada. Essa atualização, o \emph{scan seletivo}, é a parte do modelo que o hardware precisa executar passo a passo, e ela multiplica cada elemento do estado por um coeficiente de decaimento a cada passo. Os coeficientes que dão memória longa ao modelo ficam muito próximos de 1, onde a aritmética só com deslocamentos falha, e registradores de estado curtos em ponto fixo param de decair, efeito análogo à zona morta de filtros IIR em ponto fixo. Este artigo investiga se o multiplicador do decaimento pode ser eliminado sem perda de acurácia e quanta precisão o estado precisa. Propomos o coeficiente \emph{Complementary Power-of-Two} (CPoT) $\{2^{-k}, 1-2^{-k}\}$, aplicado com um deslocamento e uma subtração, e quantificamos a precisão de estado que ele exige. Um estado de 16 bits com truncamento atinge só \SqnrLegacy~dB de SQNR no \emph{datapath}, enquanto um estado de 32 bits com 10 bits de guarda e arredondamento atinge \SqnrProposed~dB, no nível de um multiplicador Q1.15 (\SqnrMult~dB). Modelos treinados com o \emph{scan} inteiro CPoT são comparados com FP32, com o baseline com multiplicador e com o decaimento em potência de dois simples, no ECG5000 e em tarefas sintéticas de memória. Numa Intel Cyclone~V, usada como veículo de medida, a \emph{lane} de \emph{scan} CPoT usa \DspCpot{} blocos DSP em vez de \DspMult{} para a mesma vazão, ao custo de mais lógica. O RTL foi conferido bit a bit contra um modelo de referência inteiro (\VerTotal{} saídas, \VerMism{} divergências).
 \end{resumo}
 
 % =============================================================================
-\section{Introdu\c{c}\~{a}o}
+\section{Introdução}
 % =============================================================================
 
-A infer\^{e}ncia de modelos de sequ\^{e}ncia em FPGAs de baixo custo, como a fam\'{\i}lia Intel Cyclone~V (28\,nm, sem HBM), \'{e} limitada por mem\'{o}ria \emph{on-chip} e por blocos DSP escassos \cite{intel_cyclone5_handbook}. Em Transformers, o \emph{KV-cache} cresce linearmente com o comprimento $L$ da sequ\^{e}ncia; para um modelo de 4 camadas com $D=128$ e chaves/valores em INT8, s\~{a}o $2 \cdot 4 \cdot 128 \cdot L$ bytes, isto \'{e}, 1\,KiB por token. Modelos de espa\c{c}o de estados seletivos (Mamba-1 \cite{gu2024mamba} e Mamba-2 \cite{dao2024transformers}) substituem a aten\c{c}\~{a}o por uma recorr\^{e}ncia linear cujo estado tem tamanho constante em $L$, o que elimina esse crescimento.
+\subsection{Motivação: memória de tamanho fixo}
+Modelos de sequência processam entradas que chegam uma após a outra: palavras de um texto, amostras de um eletrocardiograma, quadros de áudio. O Transformer, base dos modelos de linguagem atuais, processa cada nova entrada consultando \emph{todas} as anteriores (mecanismo de atenção) e, para isso, guarda uma cópia de cada uma delas, o \emph{KV-cache}. Essa memória cresce linearmente com o comprimento $L$ da sequência: mesmo um Transformer pequeno, com a largura do modelo usado neste trabalho (2 camadas, 64 canais, valores em INT8), guardaria $2 \cdot 2 \cdot 64 = 256$ bytes por passo, ou 1\,MiB para $L = 4.096$.
 
-Dois obst\'{a}culos aparecem ao mapear o Mamba-2 em uma FPGA de borda. Primeiro, as proje\c{c}\~{o}es lineares (\texttt{in\_proj} e \texttt{out\_proj}) concentram a maior parte dos par\^{a}metros (\ProjRatio{} no modelo usado aqui) e, em INT8, consomem DSPs. Segundo, o decaimento $\bar{A}_t = \exp(-\Delta_t A_h)$ dos canais de mem\'{o}ria longa fica em $[0{,}90;\,0{,}999]$, onde quantiza\c{c}\~{o}es grosseiras alteram a constante de tempo do estado.
+Modelos de espaço de estados seletivos, como o Mamba \cite{gu2024mamba} e o Mamba-2 \cite{dao2024transformers}, não guardam o passado; guardam um \emph{estado} de tamanho fixo que o resume e é atualizado a cada passo. Para quem vem de hardware, a forma mais simples de entender esse estado é como um filtro recursivo (IIR) de primeira ordem, $h_t = a\,h_{t-1} + b\,x_t$: o coeficiente $a$ define por quanto tempo uma entrada continua influenciando o estado (com $a = 0{,}999$, cerca de mil passos). O Mamba-2 é um banco de milhares desses filtros em paralelo, com uma diferença importante: $a$ e $b$ mudam a cada passo em função da própria entrada, de modo que o modelo decide o que lembrar e o que esquecer. No modelo usado aqui o estado ocupa 16\,KiB qualquer que seja $L$.
 
-Aceleradores Mamba em FPGA j\'{a} usam quantiza\c{c}\~{a}o de 4 e 8 bits em FPGAs de grande porte; o \emph{LightMamba}, por exemplo, usa rota\c{c}\~{a}o e restringe os fatores de \emph{re-escala} da quantiza\c{c}\~{a}o do SSM a pot\^{e}ncias de dois \cite{wei2025lightmamba,fastmamba2025}. Aceleradores tern\'{a}rios (1,58 bit) em FPGA, como \emph{TerEffic} e \emph{TeLLMe} \cite{yin2025tereffic,qiao2025tellme}, visam Transformers. Trabalhos algor\'{\i}tmicos mostram que o Mamba tern\'{a}rio funciona em GPU \cite{yu2025slendermamba,ganesaraja2026ternarymamba,tang2024bimamba}, mas mant\^{e}m o SSM em ponto flutuante.
+\subsection{O problema, em termos de hardware}
+A atualização do estado, chamada de \emph{scan seletivo}, é a parte do Mamba que precisa ser executada passo a passo: $h_t$ depende de $h_{t-1}$. Em GPUs, o treino e o processamento de um texto de entrada inteiro reescrevem o \emph{scan} como multiplicações de matrizes em blocos \cite{dao2024transformers}; mas na geração token a token, em aceleradores dedicados e em FPGAs, ele é executado como recorrência, por uma unidade de hardware própria \cite{li2024marca,wei2025lightmamba,fastmamba2025}. Essa unidade enfrenta três obstáculos:
+\begin{enumerate}
+  \item \textbf{Um multiplicador por elemento do estado.} A cada passo, cada elemento do estado é multiplicado pelo coeficiente de decaimento. Com milhares de elementos, são milhares de multiplicações por passo, e multiplicadores são o recurso mais caro (blocos DSP em FPGAs, área e energia em ASICs).
+  \item \textbf{Coeficientes próximos de 1.} Os canais de memória longa têm $a$ entre $0{,}90$ e $0{,}999$. A troca óbvia, aproximar $a$ por uma potência de dois ($a \approx 2^{-k}$) e multiplicar com um deslocamento de bits, falha: não existe potência de dois entre $0{,}5$ e $1$, e todos esses canais perdem a memória.
+  \item \textbf{Precisão do estado.} Mesmo com o coeficiente certo, um estado em ponto fixo curto com deslocamento truncado para de decair quando fica pequeno. É o mesmo fenômeno da \emph{zona morta} de filtros IIR em ponto fixo, conhecido em processamento digital de sinais: o canal ``congela'' num valor que deveria ter sido esquecido.
+\end{enumerate}
 
-\textbf{Contribui\c{c}\~{o}es.} (1) Um modelo Mamba-2 com proje\c{c}\~{o}es tern\'{a}rias \texttt{H-BitLinear} \cite{wang2025bitnetv2} e um \emph{scan} treinado j\'{a} com as restri\c{c}\~{o}es do hardware inteiro: escalas est\'{a}ticas em pot\^{e}ncia de dois para $x_t$, $B_t$, $C_t$ e passo $\Delta_t = 2^{-j}$. (2) A discretiza\c{c}\~{a}o CPoT de $\bar{A}_t$, que usa um deslocamento e uma subtra\c{c}\~{a}o, comparada com PoT simples e com um multiplicador Q1.15. (3) Uma an\'{a}lise da precis\~{a}o do estado inteiro, mostrando que a implementa\c{c}\~{a}o ing\^{e}nua (16 bits, truncamento) congela a mem\'{o}ria longa, e a corre\c{c}\~{a}o com bits de guarda e arredondamento. (4) RTL parametriz\'{a}vel (motor matriz-vetor INT8, tern\'{a}rio 2-bit e Radix-3; FWHT; \emph{lane} de \emph{scan}) verificado bit a bit e caracterizado em recursos para Cyclone~V.
+\subsection{Objetivo e questões de pesquisa}
+O objetivo deste trabalho é \textbf{eliminar o multiplicador do decaimento na unidade de \emph{scan} do Mamba-2, substituindo-o por deslocamento e subtração, sem perda de acurácia em relação ao modelo em ponto flutuante, e medir quanto isso economiza em hardware}. Isso se desdobra em quatro questões:
+\begin{description}
+  \item[QP1 (coeficiente).] Que aproximação do coeficiente por deslocamentos preserva memórias longas?
+  \item[QP2 (precisão).] Quantos bits, e que tipo de arredondamento, o estado inteiro precisa para que o decaimento funcione?
+  \item[QP3 (acurácia).] Modelos treinados com o \emph{scan} inteiro proposto mantêm a acurácia FP32? A aproximação proposta supera a potência de dois simples em tarefas que exigem memória de duração intermediária?
+  \item[QP4 (custo).] Quanto a unidade proposta custa em blocos DSP, lógica e frequência, comparada a uma unidade com multiplicador?
+\end{description}
 
-\textbf{Escopo.} Este artigo n\~{a}o reporta frequ\^{e}ncia m\'{a}xima, lat\^{e}ncia em placa nem pot\^{e}ncia: esses dados dependem da s\'{\i}ntese no Intel Quartus e da execu\c{c}\~{a}o na placa DE10-Nano, que ainda n\~{a}o foram realizadas (Se\c{c}\~{a}o~\ref{sec:limitacoes}).
+\subsection{Contribuições e escopo}
+\textbf{Contribuições.} (1) A discretização \emph{Complementary Power-of-Two} (CPoT), que representa coeficientes próximos de 1 com um deslocamento e uma subtração, comparada com potência de dois simples e com um multiplicador de 16 bits. (2) Uma análise da precisão do estado inteiro, que mostra que a implementação ingênua congela a memória longa e que bits de guarda com arredondamento corrigem o problema. (3) Um \emph{scan} treinado já com as restrições do hardware inteiro (escalas em potência de dois, passo $\Delta_t = 2^{-j}$), avaliado com a aritmética bit-exata do RTL em dados reais e em tarefas de memória, incluindo uma tarefa que exige esquecimento gradual. (4) Uma \emph{lane} de \emph{scan} parametrizável em Verilog, conferida bit a bit contra um modelo de referência e caracterizada em uma FPGA Intel Cyclone~V.
+
+\textbf{Escopo.} O objeto de estudo é a unidade de \emph{scan}. As projeções lineares do modelo usam INT8 convencional (W8A8), como em aceleradores Mamba existentes \cite{fastmamba2025}, e não são analisadas. A FPGA é usada como veículo de medida: síntese, posicionamento e análise de \emph{timing} no Intel Quartus dão números reais de blocos DSP, lógica e frequência para comparar variantes da unidade no mesmo dispositivo. Esses números valem como comparação relativa; não reportamos área nem energia em ASIC, nem execução em placa.
+
+\textbf{Organização.} A Seção~\ref{sec:fund} apresenta os conceitos necessários; a Seção~\ref{sec:rel}, os trabalhos relacionados; a Seção~\ref{sec:arq}, a unidade de \emph{scan}; a Seção~\ref{sec:metodologia}, a metodologia em detalhe; a Seção~\ref{sec:res}, os resultados, organizados pelas questões de pesquisa; e as Seções~\ref{sec:limitacoes} e~\ref{sec:conc}, limitações e conclusões.
 
 % =============================================================================
-\section{Fundamenta\c{c}\~{a}o}
+\section{Fundamentação}
+\label{sec:fund}
 % =============================================================================
 
-\subsection{Mamba-2}
-O Mamba-2 \cite{dao2024transformers} divide o estado em $H$ cabe\c{c}as e usa um decaimento escalar $A_h > 0$ por cabe\c{c}a. Para cada canal $p$ da cabe\c{c}a $h$ e passo $t$:
+\subsection{Do filtro de primeira ordem ao Mamba-2}
+\textbf{Um filtro, um estado.} Considere o filtro $h_t = a\,h_{t-1} + b\,x_t$ com $0 < a < 1$. Uma entrada isolada em $t=0$ deixa no estado o valor $b\,x_0\,a^t$ depois de $t$ passos: decai exponencialmente. A \emph{constante de tempo} $\tau = -1/\ln a$ é o número de passos até essa influência cair a $1/e \approx 37\%$. Para $a$ próximo de 1, $\tau \approx 1/(1-a)$.
+
+\begin{exemplo}{constantes de tempo}
+$a = 0{,}5$ dá $\tau \approx 1{,}4$ passos; $a = 0{,}9$ dá $\tau \approx 9{,}5$; $a = 0{,}999$ dá $\tau \approx 1.000$. Um canal que precisa lembrar algo visto mil passos atrás precisa de $a$ na terceira casa decimal de $1$.
+\end{exemplo}
+
+\textbf{O Mamba-2.} O Mamba-2 \cite{dao2024transformers} organiza muitos desses filtros em $H$ \emph{cabeças}. Cada cabeça $h$ tem $P$ canais de entrada, e cada canal tem $N$ estados. Para o canal $p$ no passo $t$:
 \begin{equation}
   \bar{A}_t = \exp(-\Delta_t A_h), \qquad
   \mathbf{h}_t = \bar{A}_t\, \mathbf{h}_{t-1} + \Delta_t\, x_t\, \mathbf{B}_t, \qquad
   y_t = \mathbf{C}_t^{\top} \mathbf{h}_t + D_h x_t ,
   \label{eq:ssd}
 \end{equation}
-com $\mathbf{h}_t, \mathbf{B}_t, \mathbf{C}_t \in \mathbb{R}^N$. $\Delta_t$, $\mathbf{B}_t$ e $\mathbf{C}_t$ dependem da entrada (seletividade). A constante de tempo do canal \'{e} $\tau = -1/\ln \bar{A}_t$; para $\bar{A}_t = 1 - 2^{-k}$, $\tau \approx 2^{k}$ passos.
+com $\mathbf{h}_t, \mathbf{B}_t, \mathbf{C}_t \in \mathbb{R}^N$. Lendo cada termo:
+\begin{itemize}
+  \item $x_t$ é a entrada do canal e $y_t$ a sua saída;
+  \item $\bar{A}_t$ é o coeficiente $a$ do filtro, comum aos $N$ estados da cabeça; $A_h > 0$ é aprendido e fixo após o treino;
+  \item $\Delta_t > 0$ é o \emph{passo de tempo}, calculado a partir da entrada. $\Delta_t$ grande faz $\bar{A}_t$ pequeno (esquecer depressa) e escreve a entrada com mais força; $\Delta_t$ pequeno faz o estado ignorar a entrada e lembrar o passado;
+  \item $\mathbf{B}_t$ diz em quais dos $N$ estados escrever, e $\mathbf{C}_t$ quais ler; ambos também vêm da entrada.
+\end{itemize}
+Como $\Delta_t$, $\mathbf{B}_t$ e $\mathbf{C}_t$ dependem da entrada, o modelo é \emph{seletivo}: decide, a cada passo, o que guardar. Executar a Eq.~\ref{eq:ssd} ao longo da sequência é o \emph{scan}. No modelo usado aqui ($H=4$, $P=32$, $N=16$), cada camada tem $4 \cdot 32 \cdot 16 = 2.048$ elementos de estado, e cada um é multiplicado por $\bar{A}_t$ a cada passo.
 
-\subsection{\texttt{H-BitLinear}: Hadamard sem perder a ternaridade}
-Rota\c{c}\~{o}es de Hadamard p\'{o}s-treinamento \cite{chiang2025quamba} usam $\mathbf{W}\mathbf{x} = (\mathbf{W}\mathbf{H}^{\top})(\mathbf{H}\mathbf{x})$; com $\mathbf{W}$ tern\'{a}ria, $\mathbf{W}\mathbf{H}^{\top}$ deixa de ser tern\'{a}ria. Seguindo o BitNet~v2 \cite{wang2025bitnetv2}, aplicamos a FWHT em blocos de 16 dentro do grafo de treinamento e aprendemos $\tilde{\mathbf{W}}$ diretamente no dom\'{\i}nio transformado:
-\begin{equation}
-  \tilde{\mathbf{x}} = Q_8\!\left(\tfrac{1}{4}\mathbf{H}_{16}\,\mathrm{RMSNorm}(\mathbf{x})\right), \qquad
-  \tilde{\mathbf{W}} = \mathrm{round}\!\left(\mathrm{clip}\!\left(\mathbf{W}/\gamma, -1, 1\right)\right), \quad \gamma = \overline{|\mathbf{W}|},
-\end{equation}
-com $Q_8$ a quantiza\c{c}\~{a}o sim\'{e}trica INT8 por token e estimador \emph{straight-through}. Em hardware, $\mathbf{H}_{16}$ \'{e} calculada exatamente com somas e subtra\c{c}\~{o}es; o fator $1/4$ \'{e} absorvido na escala de requantiza\c{c}\~{a}o.
+\textbf{O bloco completo.} Um bloco Mamba-2 recebe um vetor de $D$ canais por passo e: (1) aplica uma projeção linear de entrada que produz $x$, $\mathbf{B}$, $\mathbf{C}$, $\Delta$ e um sinal de \emph{gate} $z$; (2) passa $x$ por uma convolução causal curta e pela não linearidade SiLU; (3) executa o \emph{scan}; (4) multiplica $y$ por $\mathrm{SiLU}(z)$; e (5) aplica a projeção de saída e soma o resultado à entrada. Este trabalho trata apenas do passo (3).
 
-\subsection{Discretiza\c{c}\~{a}o CPoT de $\bar{A}_t$}
-Com $\bar{A}_t = 2^{-k}$ (PoT simples) a multiplica\c{c}\~{a}o vira deslocamento, mas n\~{a}o h\'{a} n\'{\i}vel entre $0{,}5$ e $1$: com $k\geq1$ todo canal lento \'{e} levado a $\leq 0{,}5$ ($\tau \leq 1{,}4$ passos); com $k\geq0$ ele \'{e} levado a $1$ e deixa de esquecer. Como $\exp(-\Delta_t A_h) \approx 1 - \Delta_t A_h$ para $\Delta_t A_h$ pequeno, aproximamos o \emph{complemento} por uma pot\^{e}ncia de dois:
+\subsection{Quantização}
+\textbf{Quantizar} é representar um número real $v$ por um inteiro $q$ e uma escala $s$, com $v \approx s\,q$. Em INT8, $q \in [-127, 127]$. Se $s$ é uma potência de dois, mudar de escala é um deslocamento de bits. Para que o modelo funcione bem depois de quantizado, usamos \emph{quantization-aware training} (QAT): a quantização é simulada durante o treino, e o modelo aprende parâmetros que funcionam bem depois de arredondados. Como o arredondamento tem derivada zero, usamos o estimador \emph{straight-through} (STE): na ida o valor é arredondado; na volta, o gradiente passa como se o arredondamento fosse a identidade.
+
+\subsection{Coeficiente com deslocamentos: PoT e CPoT}
+Multiplicar por $2^{-k}$ é deslocar $k$ bits à direita ($h \gg k$), operação praticamente gratuita em hardware. Aproximar $\bar{A}_t$ por uma potência de dois (PoT) tem um problema na faixa que interessa: os valores possíveis são $1, 0{,}5, 0{,}25, \dots$, e não há nenhum entre $0{,}5$ e $1$. Com $k \geq 1$, todo canal lento vira $0{,}5$ ($\tau \approx 1{,}4$ passos); com $k \geq 0$, vira $1$ e nunca esquece.
+
+A ideia do CPoT é aproximar por potência de dois não o coeficiente, mas o seu \emph{complemento} $1 - \bar{A}_t$, que é pequeno exatamente nos canais lentos. Como $\exp(-\Delta_t A_h) \approx 1 - \Delta_t A_h$ quando o produto é pequeno:
 \begin{equation}
   \bar{A}^{\mathrm{CPoT}}(m,k) =
   \begin{cases}
@@ -91,121 +127,269 @@ Com $\bar{A}_t = 2^{-k}$ (PoT simples) a multiplica\c{c}\~{a}o vira deslocamento
   \bar{A}^{\mathrm{CPoT}} h = \begin{cases} h \gg k\\ h - (h \gg k)\end{cases},
   \label{eq:cpot}
 \end{equation}
-com $k \in \{1,\dots,15\}$ escolhido pelo arredondamento no dom\'{\i}nio logar\'{\i}tmico de cada ramo. A variante CPoT-2 ($1 - 2^{-k_1} \mp 2^{-k_2}$) foi avaliada apenas em software. Como $\Delta_t = 2^{-j}$ e $A_h$ \'{e} fixo ap\'{o}s o treinamento, o c\'{o}digo $(m,k)$ de cada cabe\c{c}a \'{e} uma tabela de 16 entradas indexada por $j$: o hardware n\~{a}o precisa calcular $\exp$.
+com $k \in \{1,\dots,15\}$ escolhido por arredondamento no domínio logarítmico de cada ramo. O ramo $m=1$ custa um deslocamento e uma subtração.
 
-\subsection{Precis\~{a}o necess\'{a}ria no estado}
+\begin{exemplo}{CPoT}
+$\bar{A}_t = 0{,}998$ tem complemento $0{,}002 \approx 2^{-9}$, então $k = 9$ e $\bar{A}^{\mathrm{CPoT}} = 1 - 2^{-9} \approx 0{,}99805$ ($\tau = 512$ contra $500$ do valor exato). Na faixa $[0{,}90;\,0{,}999]$ o CPoT tem \LevelsCpot{} níveis, de $k=3$ a $k=10$, um por oitava de $\tau$.
+\end{exemplo}
+
+Como os níveis ficam uma oitava de $\tau$ distantes, o erro de $\tau$ pode chegar a cerca de 40\%. A variante CPoT-2 ($1 - 2^{-k_1} \mp 2^{-k_2}$) usa um segundo deslocamento para refinar e foi avaliada só em software. Como também quantizamos $\Delta_t = 2^{-j}$ e $A_h$ é fixo depois do treino, o código $(m,k)$ de cada cabeça depende só de $j$: é uma tabela de 16 entradas, e o hardware não precisa calcular $\exp$.
+
+\subsection{Precisão necessária no estado}
 \label{sec:precisao}
-Com estado inteiro e deslocamento truncado, $h - (h \gg k) = h$ sempre que $0 \le h < 2^k$: o decaimento para e o canal congela num valor positivo. Para $h<0$, $h \gg k = -1$ e o estado sobe de 1 em 1 at\'{e} zero, criando uma assimetria de sinal. Com $k$ at\'{e} 12, um estado Q8.8 de 16 bits congela valores de magnitude relevante. A corre\c{c}\~{a}o usa (i) $G$ bits de guarda (o estado guarda $h \cdot 2^{G}$), (ii) arredondamento $s = (h + 2^{k-1}) \gg k$ e (iii) estado de 32 bits com satura\c{c}\~{a}o. A inje\c{c}\~{a}o $\Delta_t x_t B_t$ vira $((x_t B_t) \ll G) \gg j$ e a leitura $y_t = (\sum_n C_t[n]\,h_t[n]) \gg G$.
+Com estado inteiro e deslocamento truncado, $h \gg k = 0$ sempre que $0 \leq h < 2^k$. Nesse caso $h - (h \gg k) = h$: o decaimento para e o canal congela (zona morta). Para $h < 0$ o deslocamento aritmético dá $-1$ e o estado sobe de 1 em 1 até zero, o que cria uma assimetria entre valores positivos e negativos.
+
+\begin{exemplo}{zona morta}
+Num estado de 16 bits sem bits de guarda, $h$ é medido em unidades do produto $B_t x_t$, que vai até $\pm16.129$ com entradas INT8. Com $k = 10$, qualquer $0 \le h < 2^{10} = 1.024$ congela: cerca de 6\% do maior valor que pode ser injetado. Um impulso de $4.096$ unidades deveria decair para $75$ em $4\tau$ passos, mas para em $1.023$.
+\end{exemplo}
+
+A correção combina três medidas: (i) $G$ \emph{bits de guarda}, isto é, o estado guarda $h \cdot 2^{G}$ e ganha $G$ bits fracionários; (ii) arredondamento para o mais próximo, $s = (h + 2^{k-1}) \gg k$, que torna o comportamento simétrico; e (iii) estado de 32 bits com saturação, para que os bits de guarda não reduzam a faixa. A zona morta não desaparece, mas cai para $|h| < 2^{k-1}$ na escala com guarda, ou seja, $2^{k-1-G}$ unidades do produto $B_t x_t$: meia unidade para $k = G = 10$. A injeção $\Delta_t x_t B_t$ vira $((x_t B_t) \ll G) \gg j$, e a leitura, $y_t = (\sum_n C_t[n]\,h_t[n]) \gg G$.
+
+\subsection{Recursos de uma FPGA Cyclone~V}
+A FPGA usada como veículo de medida, a Intel Cyclone~V \texttt{5CSEBA6U23I7} (placa DE10-Nano), tem três tipos de recurso relevantes \cite{intel_cyclone5_handbook}. \textbf{ALMs} (41.910) são os blocos lógicos: cada um tem uma tabela de consulta adaptativa que implementa uma função de até 6 entradas (ou duas menores), somadores dedicados e registradores. \textbf{Blocos DSP} (112) contêm multiplicadores de precisão variável: três de 9$\times$9 bits, dois de 18$\times$18 ou um de 27$\times$27 por bloco. \textbf{M10K} (553) são blocos de RAM de 10\,Kbit. Os blocos DSP são o recurso mais escasso para multiplicações: trocá-los por lógica faz sentido quando a lógica disponível sobra, e é isso que a QP4 mede.
 
 % =============================================================================
 \section{Trabalhos Relacionados}
+\label{sec:rel}
 % =============================================================================
 
-A Tabela~\ref{tab:sota} resume os trabalhos mais pr\'{o}ximos. Componentes isolados j\'{a} existem: empacotamento de 5 trits por byte em \emph{TerEffic} \cite{yin2025tereffic}, multiplica\c{c}\~{a}o por tabela em T-MAC/\emph{TeLLMe} \cite{wei2024tmac,qiao2025tellme} e Hadamard no QAT em BitNet~v2 \cite{wang2025bitnetv2}. N\~{a}o encontramos trabalho que una proje\c{c}\~{o}es tern\'{a}rias a um \emph{scan} inteiro do Mamba-2 com decaimento sem multiplicador e an\'{a}lise da precis\~{a}o do estado.
+\textbf{Mamba em baixa precisão.} O Quamba \cite{chiang2025quamba,chiang2025quamba2} quantiza Mamba-1 e Mamba-2 para 8 e 4 bits após o treino, com o \emph{scan} em INT8 na GPU. Bi-Mamba \cite{tang2024bimamba}, Slender-Mamba \cite{yu2025slendermamba} e Ternary Mamba \cite{ganesaraja2026ternarymamba} usam pesos binários ou ternários nas projeções, mas mantêm o \emph{scan} em ponto flutuante. Nenhum deles trata de como executar o decaimento sem multiplicador nem da precisão do estado inteiro.
+
+\textbf{Aceleradores de Mamba.} O MARCA \cite{li2024marca} é um acelerador ASIC simulado para Mamba-1 com multiplicadores densos e aproximações por partes das funções não lineares. O LightMamba \cite{wei2025lightmamba} e o FastMamba \cite{fastmamba2025} são aceleradores Mamba-2 para FPGAs de grande porte (Alveo, Versal, Virtex-7), com pesos de 4 e 8 bits. O LightMamba restringe a potências de dois os \emph{fatores de re-escala} da quantização, não o coeficiente $\bar{A}_t$; o decaimento continua sendo uma multiplicação.
+
+A Tabela~\ref{tab:sota} resume a comparação. Não encontramos trabalho que substitua a multiplicação do decaimento por deslocamentos na faixa de memória longa nem que analise a precisão necessária do estado inteiro.
 
 \begin{table}[htb]
 \centering
-\caption{Trabalhos relacionados.}
+\caption{Trabalhos relacionados: como cada um executa o \emph{scan}.}
 \label{tab:sota}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{lllllll}
+\begin{tabular}{llllll}
 \toprule
-\textbf{Trabalho} & \textbf{Modelo} & \textbf{Pesos/Ativ.} & \textbf{SSM} & \textbf{Plataforma} & \textbf{Diferen\c{c}a para este trabalho} \\
+\textbf{Trabalho} & \textbf{Modelo} & \textbf{Projeções} & \textbf{\emph{Scan}} & \textbf{Plataforma} & \textbf{Decaimento $\bar{A}_t h$} \\
 \midrule
-BitNet b1.58 \cite{ma2024era} & Transformer & 1,58b / INT8 & --- & GPU & Sem SSM; KV-cache $O(L)$. \\
-BitNet v2 \cite{wang2025bitnetv2} & Transformer & 1,58b / INT4 & --- & GPU & Origem do \texttt{H-BitLinear}; sem hardware. \\
-Quamba/Quamba2 \cite{chiang2025quamba,chiang2025quamba2} & Mamba-1/2 & W8A8 / W4A8 & INT8 & GPU & PTQ; rota\c{c}\~{a}o absorvida nos pesos. \\
-Bi-Mamba \cite{tang2024bimamba} & Mamba-1 & 1b / FP16 & FP16 & GPU & Pesos bin\'{a}rios; SSM em ponto flutuante. \\
-Slender-Mamba \cite{yu2025slendermamba} & Mamba-2 & 1,58b / INT8 & FP16 & GPU & Sem \emph{datapath} inteiro do \emph{scan}. \\
-Ternary Mamba \cite{ganesaraja2026ternarymamba} & Mamba-2 & 1,58b / FP16 & FP16 & GPU & QAT agrupado; SSM em FP16. \\
-MARCA \cite{li2024marca} & Mamba-1 & INT8 / FP16 & PWL & ASIC (sim.) & Multiplicadores densos. \\
-LightMamba \cite{wei2025lightmamba} & Mamba-2 & W4A4 & PoT nas escalas & Alveo U280, VCK190 & FPGA de grande porte; DSPs nas proje\c{c}\~{o}es. \\
-FastMamba \cite{fastmamba2025} & Mamba-2 & W8A8 & PoT nas escalas & Virtex-7 & Pesos lineares em 8 bits. \\
-TerEffic \cite{yin2025tereffic} & Transformer & 1,6b / INT8 & --- & Alveo U280 & KV-cache $O(L)$, HBM. \\
-TeLLMe \cite{qiao2025tellme} & Transformer & 1,58b / INT8 & --- & Kria KV260 & KV-cache $O(L)$. \\
+Quamba/Quamba2 \cite{chiang2025quamba,chiang2025quamba2} & Mamba-1/2 & W8A8 / W4A8 & INT8 & GPU & multiplicação \\
+Bi-Mamba \cite{tang2024bimamba} & Mamba-1 & 1 bit & FP16 & GPU & multiplicação \\
+Slender-Mamba \cite{yu2025slendermamba} & Mamba-2 & 1,58 bit & FP16 & GPU & multiplicação \\
+Ternary Mamba \cite{ganesaraja2026ternarymamba} & Mamba-2 & 1,58 bit & FP16 & GPU & multiplicação \\
+MARCA \cite{li2024marca} & Mamba-1 & INT8 & FP16/INT8 & ASIC (sim.) & multiplicação \\
+LightMamba \cite{wei2025lightmamba} & Mamba-2 & W4A4 & INT, escalas PoT & Alveo U280, VCK190 & multiplicação \\
+FastMamba \cite{fastmamba2025} & Mamba-2 & W8A8 & INT, escalas PoT & Virtex-7 & multiplicação \\
 \midrule
-\textbf{BitMamba-CV} & \textbf{Mamba-2} & \textbf{1,58b / INT8} & \textbf{CPoT inteiro} & \textbf{Cyclone V (RTL)} & --- \\
+\textbf{Este trabalho} & \textbf{Mamba-2} & W8A8 & \textbf{INT, estado 32b} & \textbf{Cyclone V (medida)} & \textbf{deslocamento + subtração} \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
 % =============================================================================
-\section{Arquitetura}
+\section{Unidade de \emph{Scan} Proposta}
+\label{sec:arq}
 % =============================================================================
 
-O RTL implementado (Verilog-2005, diret\'{o}rio \path{hw/rtl}) cont\'{e}m quatro blocos, todos parametriz\'{a}veis.
+A unidade proposta (\path{hw/rtl/scan_lane.v}, Verilog-2005) implementa a Eq.~\ref{eq:ssd} para um canal $x_t$ e seus $N$ estados em paralelo, com a aritmética da Seção~\ref{sec:precisao}. Chamamos essa unidade de \emph{lane}; um acelerador completo replica várias \emph{lanes}, uma por canal processado em paralelo. A cada token chegam $x_t$, $\mathbf{B}_t$, $\mathbf{C}_t$ (INT8) e os códigos $(m, k, j)$, lidos da tabela de 16 entradas da cabeça, de modo que o decaimento muda a cada passo, como exige a seletividade. A Figura~\ref{fig:lane} mostra uma das $N$ vias de estado. São três estágios:
+\begin{enumerate}
+  \item \textbf{S0}: produtos $B_t[n]\,x_t$ (INT8$\times$INT8, em DSP);
+  \item \textbf{S1}: recorrência. Para cada $n$: decaimento CPoT (deslocamento com arredondamento e subtração), injeção $((B_t x_t) \ll G) \gg j$, soma e saturação para a largura do estado. Este estágio é um laço de 1 ciclo: $h_t$ depende de $h_{t-1}$, então não pode ser dividido em mais estágios sem processar canais intercalados;
+  \item \textbf{S2}: produtos $C_t[n]\,h_t[n]$ (em DSP), árvore de soma de $N$ termos com um registrador por nível, deslocamento de $G$ bits e saturação da saída para 24 bits.
+\end{enumerate}
+Parâmetros do módulo selecionam a largura do estado, os bits de guarda, o arredondamento e o tipo de decaimento. Com \texttt{DECAY=1}, o decaimento usa um multiplicador Q1.15, $(h \cdot a + 2^{14}) \gg 15$, que é o baseline. A \emph{lane} processa um token por ciclo; a latência é de $4 + \log_2 N$ ciclos.
 
-\textbf{Motor matriz-vetor} (\path{bitlinear_engine.v}). Calcula $\mathbf{y} = \mathbf{W}\mathbf{x}$ com $\mathbf{W} \in \mathbb{Z}^{M\times K}$ e $P$ vias paralelas: a cada ciclo l\^{e} uma palavra de pesos da RAM interna, forma $P$ produtos e soma-os numa \'{a}rvore bin\'{a}ria com um registrador por n\'{\i}vel (lat\^{e}ncia $\log_2 P$); um acumulador soma as $K/P$ fatias de cada linha. A lat\^{e}ncia medida em simula\c{c}\~{a}o \'{e} $MK/P + \log_2 P + 3$ ciclos por produto matriz-vetor. H\'{a} tr\^{e}s codifica\c{c}\~{o}es de peso: \textbf{INT8} (produtos em DSP), \textbf{tern\'{a}rio 2-bit} (c\'{o}digo \{n\~{a}o-zero, negativo\}; o produto vira um multiplexador $\{+x, 0, -x\}$ em l\'{o}gica) e \textbf{Radix-3}, em que 5 trits ocupam 1 byte ($\sum_i (w_i+1)3^i \le 242$). No Radix-3, 5 linhas consecutivas de $P$ pesos ($5P$ trits) ocupam exatamente uma palavra de $8P$ bits, o que d\'{a} 1,6 bit/peso; $P$ decodificadores combinacionais (tabela de 243 entradas) expandem a palavra e um multiplexador 5:1 seleciona a linha corrente.
-
-\textbf{FWHT} (\path{fwht16.v}). Transformada de Walsh-Hadamard de 16 pontos exata, com 4 est\'{a}gios registrados de soma/subtra\c{c}\~{a}o, entrada INT8 e sa\'{\i}da de 12 bits sem satura\c{c}\~{a}o.
-
-\textbf{\emph{Lane} de \emph{scan}} (\path{scan_lane.v}). Implementa a Eq.~\ref{eq:ssd} para um canal e $N$ estados em paralelo, com os c\'{o}digos $(m, k, j)$ chegando junto com cada token. Est\'{a}gios: produto $B_t x_t$ (DSP), recorr\^{e}ncia com la\c{c}o de 1 ciclo (decaimento CPoT da Se\c{c}\~{a}o~\ref{sec:precisao}, inje\c{c}\~{a}o por deslocamento, satura\c{c}\~{a}o), produtos $C_t h_t$ (DSP) e \'{a}rvore de soma. Par\^{a}metros selecionam a largura do estado, os bits de guarda, o arredondamento e o tipo de decaimento (CPoT ou multiplicador Q1.15, usado como baseline).
-
-\textbf{N\~{a}o implementado em RTL:} RMSNorm, quantiza\c{c}\~{a}o din\^{a}mica por token, \texttt{Conv1D}, SiLU, o termo $D_h x_t$ e a integra\c{c}\~{a}o com o processador ARM (HPS) via barramento AXI. No modelo de software, \emph{embedding}, \texttt{Conv1D} e a camada de classifica\c{c}\~{a}o permanecem em ponto flutuante.
+\begin{figure}[htb]
+\centering
+\begin{tikzpicture}[
+  font=\footnotesize, node distance=3mm and 6mm,
+  op/.style={draw, rounded corners=2pt, minimum height=7mm, align=center, fill=blue!6},
+  dsp/.style={draw, rounded corners=2pt, minimum height=7mm, align=center, fill=orange!15},
+  reg/.style={draw, fill=black!10, minimum width=2mm, minimum height=10mm, inner sep=0pt},
+  arr/.style={-{Stealth[length=2mm]}}]
+  \node (in) {$x_t,\ \mathbf{B}_t$};
+  \node[dsp, right=of in] (bx) {$B_t[n]\,x_t$\\(DSP)};
+  \node[reg, right=4mm of bx] (r0) {};
+  \node[op, right=4mm of r0] (inj) {$\ll G \gg j$};
+  \node[op, right=of inj] (add) {$+$ e sat.};
+  \node[reg, right=4mm of add] (h) {};
+  \node[above=0mm of h] {$h_t[n]$};
+  \node[op, below=6mm of add, xshift=-12mm] (dec) {$h - ((h + 2^{k-1}) \gg k)$\\CPoT, sem DSP};
+  \node[dsp, right=6mm of h] (ch) {$C_t[n]\,h_t[n]$\\(DSP)};
+  \node[op, right=of ch] (tree) {árvore\\$N$ termos};
+  \node[right=4mm of tree] (y) {$y_t$};
+  \draw[arr] (in) -- (bx); \draw[arr] (bx) -- (r0); \draw[arr] (r0) -- (inj); \draw[arr] (inj) -- (add);
+  \draw[arr] (add) -- (h); \draw[arr] (h.south) |- (dec.east); \draw[arr] (dec.north -| add.south) -- (add.south);
+  \draw[arr] (h) -- (ch); \draw[arr] (ch) -- (tree); \draw[arr] (tree) -- (y);
+  \node[below=1mm of dec, align=center, text=black!70] {códigos $(m,k,j)$ chegam com o token};
+  \node[above=7mm of bx, text=black!70] {S0};
+  \node[above=7mm of add, text=black!70] {S1: laço de 1 ciclo};
+  \node[above=7mm of tree, text=black!70] {S2};
+\end{tikzpicture}
+\caption{Uma via de estado da \emph{lane} de \emph{scan} (replicada $N=16$ vezes). Laranja: multiplicações em DSP. O decaimento CPoT (azul, embaixo) usa só soma, deslocamento e subtração; no baseline, essa caixa é um multiplicador Q1.15.}
+\label{fig:lane}
+\end{figure}
 
 % =============================================================================
 \section{Metodologia}
 \label{sec:metodologia}
 % =============================================================================
 
-\subsection{Especifica\c{c}\~{a}o \'{u}nica e fluxo de verifica\c{c}\~{a}o}
-O modelo de refer\^{e}ncia (\path{sw/models/golden_model_bitexact.py}) define, em aritm\'{e}tica inteira, cada bloco do RTL: decodifica\c{c}\~{a}o Radix-3, FWHT, produto matriz-vetor e o passo do \emph{scan} (larguras, satura\c{c}\~{o}es e deslocamentos aritm\'{e}ticos). O script \path{sw/verify_rtl.py} gera os est\'{\i}mulos e as sa\'{\i}das esperadas a partir desse modelo, simula cada m\'{o}dulo no Icarus Verilog 12 e exige zero diverg\^{e}ncias. Foram cobertos: os 256 c\'{o}digos do decodificador (exaustivo); 2.000 vetores da FWHT, incluindo os extremos $\pm128$; o motor matriz-vetor nas tr\^{e}s codifica\c{c}\~{o}es com $P \in \{16, 32, 64\}$, pesos tern\'{a}rios com 30\% de zeros e ativa\c{c}\~{o}es INT8 uniformes; e tr\^{e}s configura\c{c}\~{o}es do \emph{scan} com 4 sequ\^{e}ncias de 512 tokens, decaimentos majoritariamente em $1-10^{-[0{,}2;\,3{,}5]}$, 15\% de tokens de decaimento r\'{a}pido e $j$ aleat\'{o}rio. Para confirmar que os testes detectam erros, simulamos mutantes (arredondamento desligado; codifica\c{c}\~{a}o de peso trocada), que produziram 780/2.048 e 160/160 diverg\^{e}ncias. A emula\c{c}\~{a}o inteira usada no treinamento (Se\c{c}\~{a}o~\ref{sec:qat}) \'{e} checada contra o mesmo modelo de refer\^{e}ncia.
+Esta seção descreve cada etapa com detalhe suficiente para reprodução. Todos os scripts estão em \path{sw/}, e todos os números do artigo saem dos arquivos que eles geram.
 
-\subsection{Treinamento QAT e abla\c{c}\~{a}o}
+\subsection{Visão geral: uma especificação, três usos}
+Um risco comum em co-projeto é o modelo treinado e o circuito divergirem em detalhes de aritmética (larguras, arredondamentos, saturações), de modo que a acurácia medida em software não vale para o hardware. Para evitar isso, a aritmética inteira do \emph{scan} é definida uma única vez, num \emph{modelo de referência} em Python (\path{sw/models/golden_model_bitexact.py}), e esse mesmo modelo é usado de três formas (Figura~\ref{fig:fluxo}): (a) gera as saídas esperadas para conferir o RTL; (b) substitui o \emph{scan} em ponto flutuante na avaliação dos modelos treinados (emulação inteira); e (c) é a base dos experimentos numéricos E3 e E4. A síntese no Quartus completa o fluxo com as métricas de hardware.
+
+\begin{figure}[htb]
+\centering
+\begin{tikzpicture}[font=\footnotesize, node distance=4mm and 8mm,
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=8mm, fill=blue!6},
+  arr/.style={-{Stealth[length=2mm]}}]
+  \node[box, fill=orange!15] (g) {Modelo de referência inteiro\\\texttt{golden\_model\_bitexact.py}};
+  \node[box, right=of g, yshift=15mm] (v) {(a) Verificação do RTL\\\texttt{verify\_rtl.py} + Icarus Verilog};
+  \node[box, right=of g] (q) {(b) Emulação inteira no QAT\\\texttt{train\_ablation.py}};
+  \node[box, right=of g, yshift=-15mm] (e) {(c) Experimentos E1--E4\\\texttt{long\_range\_experiment.py}};
+  \node[box, right=of q] (p) {JSON em \texttt{sw/results/}\\$\rightarrow$ tabelas e figuras\\\texttt{make\_paper\_assets.py}};
+  \node[box, below=6mm of p] (s) {Síntese Quartus\\\texttt{synth\_quartus.py}};
+  \draw[arr] (g.east) -- (v.west); \draw[arr] (g) -- (q); \draw[arr] (g.east) -- (e.west);
+  \draw[arr] (v.east) -- (p); \draw[arr] (q) -- (p); \draw[arr] (e.east) -- (p); \draw[arr] (s) -- (p);
+\end{tikzpicture}
+\caption{Fluxo metodológico. Cada etapa grava um JSON; um único script gera tabelas, figura e as macros com cada número do texto.}
+\label{fig:fluxo}
+\end{figure}
+
+\subsection{Modelo de referência inteiro}
+O modelo de referência define, bit a bit, o passo do \emph{scan}: o produto $B_t x_t$ (INT8$\times$INT8), a injeção com $G$ bits de guarda e deslocamento de $j$ bits, o decaimento (CPoT com deslocamento truncado ou arredondado, ou multiplicador Q1.15), a saturação do estado e a leitura com saturação da saída para 24 bits. Três configurações são usadas no artigo: \textbf{legado} (16 bits, $G=0$, truncamento: a implementação ingênua), \textbf{proposta} (32 bits, $G=10$, arredondamento) e \textbf{baseline} (32 bits, $G=10$, multiplicador Q1.15). O próprio script tem um autoteste que reproduz o congelamento da Seção~\ref{sec:precisao}.
+
+\subsection{Verificação do RTL}
+O script \path{sw/verify_rtl.py} executa, para cada configuração da \emph{lane}: (1) gera estímulos aleatórios com semente fixa; (2) calcula as saídas esperadas no modelo de referência; (3) grava ambos em arquivos hexadecimais; (4) compila e simula o módulo com seu \emph{testbench} no Icarus Verilog 12, que aplica os estímulos ao circuito e compara cada saída com a esperada; e (5) registra o número de saídas comparadas e de divergências. O critério de aprovação é zero divergências. Os estímulos são 4 sequências de 512 tokens por configuração, com o estado zerado entre sequências: 85\% dos tokens têm decaimento lento ($\bar{A} = 1 - 10^{-u}$, $u \sim \mathcal{U}[0{,}2;\,3{,}5]$), 15\% decaimento rápido, e $j$, $x_t$, $\mathbf{B}_t$, $\mathbf{C}_t$ são aleatórios.
+
+Um teste que nunca falha não prova nada. Para confirmar que o teste detecta erros, simulamos um \emph{mutante}: a \emph{lane} proposta com o arredondamento desligado, que deve divergir do modelo de referência. A emulação inteira usada no treino é conferida contra o mesmo modelo de referência por um autoteste em \path{sw/models/mamba2_ssd_qat.py}.
+
+\subsection{Modelo e treinamento}
 \label{sec:qat}
-\textbf{Modelo.} Classificador com \emph{embedding} linear, 2 blocos Mamba-2 ($D=64$, expans\~{a}o 2, $H=4$ cabe\c{c}as, $N=16$, \texttt{Conv1D} com $k=4$), RMSNorm e camada linear aplicada ao \'{u}ltimo token; \NParams{} par\^{a}metros, dos quais \NProjParams{} nas proje\c{c}\~{o}es. A inicializa\c{c}\~{a}o segue o Mamba-2: $A_h \sim \mathcal{U}[1,16]$ e $\Delta \sim \log\mathcal{U}[10^{-3}, 10^{-1}]$.
+\textbf{Modelo.} Classificador com \emph{embedding} linear da entrada para $D=64$ canais, 2 blocos Mamba-2 (expansão 2, isto é, 128 canais internos; $H=4$ cabeças de $P=32$ canais; $N=16$; convolução de 4 posições por canal), RMSNorm final e camada linear aplicada à saída do último passo, com \NParams{} parâmetros. A inicialização segue o Mamba-2: $A_h \sim \mathcal{U}[1,16]$ e $\Delta \sim \log\mathcal{U}[10^{-3}, 10^{-1}]$. O \emph{scan} de treino usa a forma em blocos de 64 passos do Mamba-2, matematicamente igual à recorrência sequencial (igualdade conferida por autoteste) e cerca de 3$\times$ mais rápida na GPU.
 
-\textbf{Configura\c{c}\~{o}es.} A0: FP32. A1: W8A8 (pesos INT8 por linha, ativa\c{c}\~{o}es INT8 por token). A2: pesos tern\'{a}rios sem FWHT. A3: \texttt{H-BitLinear}. De A4 a A8 o \emph{scan} usa as restri\c{c}\~{o}es do hardware: $x_t$, $B_t$, $C_t$ em INT8 com escala est\'{a}tica $2^{e}$ calibrada por m\'{e}dia m\'{o}vel do m\'{a}ximo absoluto, $\Delta_t = 2^{-j}$ com $j \in [0, 15]$, e $\bar{A}_t = \exp(-\Delta_t A_h)$ quantizado por Q1.15 (A4), PoT com $k\geq1$ (A5), PoT com $k\geq0$ (A6), CPoT (A7) ou CPoT-2 (A8). Em A1--A3 o \emph{scan} usa quantiza\c{c}\~{a}o din\^{a}mica por token e $\bar{A}_t$ exato. Todas as quantiza\c{c}\~{o}es usam estimador \emph{straight-through}.
-
-\textbf{Emula\c{c}\~{a}o inteira.} Para A4 e A7, o modelo treinado tamb\'{e}m \'{e} avaliado substituindo o \emph{scan} em ponto flutuante pela recorr\^{e}ncia inteira do modelo de refer\^{e}ncia (A4$^\dagger$: multiplicador Q1.15, 32 bits; A7$^\dagger$: CPoT, 32 bits, 10 bits de guarda, arredondamento; A7$^\ddagger$: CPoT com o estado legado de 16 bits e truncamento). Isso mede o efeito da aritm\'{e}tica do RTL na acur\'{a}cia sem retreinar.
-
-\textbf{Tarefas.} (i) \textbf{ECG5000} \cite{ecg5000}: 5 classes, $L=140$, divis\~{a}o oficial com \TrainEcg{} s\'{e}ries de treino e \TestEcg{} de teste; como as classes s\~{a}o desbalanceadas, reportamos tamb\'{e}m a acur\'{a}cia balanceada (m\'{e}dia das revoca\c{c}\~{o}es por classe). (ii) \textbf{Recorda\c{c}\~{a}o atrasada} (sint\'{e}tica): 4 classes; a classe aparece apenas nos 8 primeiros passos (\emph{one-hot} de amplitude 2 em 4 canais) e o restante da sequ\^{e}ncia \'{e} ru\'{\i}do gaussiano ($\sigma=0{,}1$, 8 canais). A sa\'{\i}da \'{e} lida em $t = L-1$, ent\~{a}o a tarefa exige mem\'{o}ria de $\approx L$ passos. Usamos $L=256$ (\TrainCueA{} treino, \TestCueA{} teste) e $L=1024$ (\TrainCueB{}/\TestCueB{}). Numa vers\~{a}o preliminar com canais de \emph{outliers} ($\sigma=12$) nem o modelo FP32 aprendeu a tarefa para $L\geq128$, e esses canais foram removidos.
-
-\textbf{Treinamento.} AdamW (taxa m\'{a}xima $2\cdot10^{-3}$, \emph{one-cycle}, \emph{weight decay} $10^{-2}$), recorte de gradiente em 1, entropia cruzada; \EpochsEcg{} \'{e}pocas (ECG5000) e \EpochsCueA{} \'{e}pocas (recorda\c{c}\~{a}o); \SeedsEcg{} sementes para ECG5000 e $L=256$, \SeedsCueB{} para $L=1024$. Sem sele\c{c}\~{a}o de modelo no conjunto de teste: avalia-se o modelo da \'{u}ltima \'{e}poca. Reportamos m\'{e}dia $\pm$ desvio padr\~{a}o entre sementes.
-
-\subsection{Experimentos num\'{e}ricos de mem\'{o}ria longa}
-Sem treinamento (\path{sw/long_range_experiment.py}): \textbf{E1} mede o erro de cada esquema sobre 2.000 valores de $\bar{A} \in [0{,}90;\,0{,}999]$, tanto em $\bar{A}$ quanto na constante de tempo $\tau$. \textbf{E2} mede a fidelidade da leitura final $y_L$ com $L$ de 64 a 16.384, 8 cabe\c{c}as com $\tau$ log-espa\c{c}ado de 16 at\'{e} $L$, um gatilho forte em $t=0$ e ru\'{\i}do; s\'{o} $\bar{A}$ \'{e} quantizado e o estado \'{e} float (5 sementes). \textbf{E3} \'{e} a resposta ao impulso do estado inteiro do RTL sob $1-2^{-k}$. \textbf{E4} \'{e} o SQNR da sa\'{\i}da do \emph{datapath} inteiro com entradas INT8 aleat\'{o}rias, $k \in [4,12]$, $j=k-1$ e $T=4.096$, contra a recorr\^{e}ncia em float com os \emph{mesmos} c\'{o}digos quantizados: mede apenas o erro aritm\'{e}tico do \emph{datapath}.
-
-\subsection{Estimativa de recursos}
-Sem o Intel Quartus dispon\'{\i}vel, sintetizamos cada variante com o \YosysVersion{} \cite{yosys} (\texttt{synth\_intel\_alm -family cyclonev}). O passo ABC9 dessa vers\~{a}o aborta nesses projetos (asser\c{c}\~{a}o interna), ent\~{a}o o fluxo roda at\'{e} o mapeamento de LUTs e usa o ABC cl\'{a}ssico (\texttt{abc -lut 6}). Reportamos c\'{e}lulas mapeadas (LUTs de at\'{e} 6 entradas, c\'{e}lulas de \emph{carry}, \emph{flip-flops}, blocos M10K e multiplicadores 9$\times$9/18$\times$18/27$\times$27), n\~{a}o ALMs do \emph{fitter}. O n\'{u}mero de blocos DSP \'{e} estimado pela capacidade de um bloco Cyclone~V (3$\times$9$\times$9, 2$\times$18$\times$18 ou 1$\times$27$\times$27). Frequ\^{e}ncia m\'{a}xima n\~{a}o \'{e} estimada. O motor foi sintetizado para uma proje\c{c}\~{a}o com $K=\EngK$ e $M=\EngM$ (131.072 pesos).
-
-\subsection{Reprodutibilidade}
-Todos os n\'{u}meros deste artigo s\~{a}o gerados por \path{sw/make_paper_assets.py} a partir dos arquivos em \path{sw/results/}, produzidos por \path{verify_rtl.py}, \path{long_range_experiment.py}, \path{train_ablation.py} e \path{synth_yosys.py}. O script \path{synth_quartus.py} (s\'{\i}ntese, \emph{fit} e \emph{timing} no Quartus Prime Lite para o dispositivo \texttt{5CSEBA6U23I7}) est\'{a} pronto, mas ainda n\~{a}o foi executado.
-
-% =============================================================================
-\section{Resultados}
-% =============================================================================
-
-\subsection{Discretiza\c{c}\~{a}o de $\bar{A}_t$ e precis\~{a}o do estado}
+\textbf{Configurações da ablação.} A ablação muda só o \emph{scan} (Tabela~\ref{tab:configs}), de modo que a diferença entre duas linhas isola o efeito de uma escolha. S0 é o modelo inteiro em FP32. De S1 em diante, as projeções usam W8A8: pesos INT8 com escala por linha e ativações INT8 com escala por passo. Em S1 o \emph{scan} recebe $x$, $\mathbf{B}$, $\mathbf{C}$ quantizados em INT8 com escala dinâmica e usa $\bar{A}_t$ exato: é o ``\emph{scan} ideal''. A partir de S2 o \emph{scan} obedece às restrições do hardware: as escalas de $x$, $\mathbf{B}$, $\mathbf{C}$ são \emph{estáticas} e potências de dois, $2^{\lceil \log_2(m/127) \rceil}$, em que $m$ é uma média móvel (momento 0,99) do máximo absoluto observado no treino, de modo que a requantização é um deslocamento; e $\Delta_t$ é arredondado para $2^{-j}$, $j \in [0, 15]$, no domínio logarítmico. Entre S2 e S6 muda apenas a forma de $\bar{A}_t$. Todas as quantizações usam STE.
 
 \begin{table}[htb]
 \centering
-\caption{E1 e E2: quantiza\c{c}\~{a}o de $\bar{A} \in [0{,}90;\,0{,}999]$ (n\'{\i}veis distintos usados, erro absoluto m\'{a}ximo, erro relativo mediano de $\tau$) e SQNR (dB) da leitura $y_L$ com estado em float (m\'{e}dia de 5 sementes).}
+\caption{Configurações da ablação. ``Dinâm.'': escala INT8 por passo; ``PoT est.'': escala estática em potência de dois.}
+\label{tab:configs}
+\footnotesize
+\begin{tabular}{llccl}
+\toprule
+\textbf{Id} & \textbf{Projeções} & \textbf{$x, \mathbf{B}, \mathbf{C}$} & \textbf{$\Delta_t$} & \textbf{$\bar{A}_t$} \\
+\midrule
+S0 & FP32 & FP32 & real & exato \\
+S1 & W8A8 & INT8 dinâm. & real & exato \\
+S2 & W8A8 & INT8 PoT est. & $2^{-j}$ & Q1.15 (multiplicador) \\
+S3 & W8A8 & INT8 PoT est. & $2^{-j}$ & PoT, $k\geq1$ \\
+S4 & W8A8 & INT8 PoT est. & $2^{-j}$ & PoT, $k\geq0$ \\
+S5 & W8A8 & INT8 PoT est. & $2^{-j}$ & CPoT (proposto) \\
+S6 & W8A8 & INT8 PoT est. & $2^{-j}$ & CPoT-2 (só software) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Emulação inteira.} O treino usa \emph{fake quantization}: valores arredondados, mas contas em ponto flutuante. Para medir o efeito da aritmética real do RTL, os modelos S2 e S5 já treinados são reavaliados com o \emph{scan} substituído pela recorrência inteira do modelo de referência, sem retreinar: S2$^\dagger$ (multiplicador Q1.15, 32 bits), S5$^\dagger$ (CPoT, configuração proposta) e S5$^\ddagger$ (CPoT, estado legado de 16 bits).
+
+\textbf{Treinamento.} Os hiperparâmetros estão na Tabela~\ref{tab:hparams} e são iguais para todas as configurações. Não há seleção de modelo nem parada antecipada: avalia-se o modelo da última época, o que evita usar o conjunto de teste para escolher pontos de parada. A semente de cada execução fixa a inicialização e a ordem dos lotes; os conjuntos sintéticos são gerados uma única vez (semente 7) e são os mesmos para todas as execuções.
+
+\begin{table}[htb]
+\centering
+\caption{Hiperparâmetros de treino (\path{sw/train_ablation.py}).}
+\label{tab:hparams}
+\footnotesize
+\begin{tabular}{ll}
+\toprule
+Otimizador & AdamW, \emph{weight decay} $10^{-2}$ \\
+Taxa de aprendizado & política \emph{one-cycle}, máximo $2\cdot10^{-3}$ \\
+Recorte de gradiente & norma 1 \\
+Perda & entropia cruzada \\
+Épocas / lote & ECG5000: \EpochsEcg{} / 32; tarefas sintéticas: \EpochsCueA{} / 64 \\
+Sementes & 42, 100, 2026, 7, 31; recordação com $L=1024$: as \SeedsCueB{} primeiras \\
+Software & Python 3.12, PyTorch 2.10, GPU NVIDIA RTX 3060 Laptop \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Tarefas e métricas}
+\textbf{ECG5000} \cite{ecg5000}: batimentos cardíacos extraídos de um eletrocardiograma, cada um com $L=140$ amostras, em 5 classes. Usamos a divisão oficial do arquivo UCR, com \TrainEcg{} séries de treino e \TestEcg{} de teste. As classes são desbalanceadas (a majoritária tem cerca de 58\% das amostras), então reportamos também a \emph{acurácia balanceada}, a média da taxa de acerto de cada classe, que vale 20\% para um classificador que sempre responde a classe majoritária.
+
+\textbf{Recordação atrasada} (sintética): mede a capacidade de \emph{reter} informação por $L$ passos. Cada sequência tem 8 canais. Nos 8 primeiros passos, um de 4 canais recebe um pulso de amplitude 2 que indica a classe; depois, todos os canais têm apenas ruído gaussiano ($\sigma = 0{,}1$). O modelo só responde no último passo, então precisa reter a informação por $\approx L$ passos. O acaso dá 25\%. Usamos $L=256$ (\TrainCueA{} sequências de treino, \TestCueA{} de teste) e $L=1024$ (\TrainCueB{}/\TestCueB{}). Uma versão preliminar tinha também canais de ruído com $\sigma=12$, e nela nem o modelo FP32 aprendeu a tarefa com $L\geq128$; esses canais foram removidos.
+
+\textbf{Maioria em janela} (sintética): mede a capacidade de \emph{esquecer gradualmente}, que a recordação não testa. Cada sequência tem $L=512$ passos e 4 canais com ruído gaussiano ($\sigma = 0{,}1$). Eventos são pulsos de amplitude 1 no canal 0 (tipo A) ou 1 (tipo B). Nos últimos $W=64$ passos há exatamente 15 eventos em posições aleatórias, cada um A ou B com probabilidade $1/2$; o rótulo é o tipo majoritário entre eles. Antes da janela, eventos ocorrem com taxa $0{,}25$ por passo e um viés forte (85\% de um tipo, sorteado por sequência, independente do rótulo). Um estado que nunca esquece ($\bar{A}=1$) é dominado pelos cerca de 112 eventos do histórico; um que esquece depressa ($\bar{A}\leq0{,}5$) só vê os últimos eventos. Resolver a tarefa exige constantes de tempo da ordem da janela, $\tau \approx 16$ a $64$ passos, ou seja, $\bar{A}$ entre $0{,}94$ e $0{,}985$. O acaso dá 50\%; usamos \TrainWin{} sequências de treino e \TestWin{} de teste.
+
+\textbf{Métricas.} Reportamos acurácia de teste média $\pm$ desvio padrão entre sementes. Como a recordação tende a ser ``tudo ou nada'' (a semente aprende ou fica no acaso), reportamos também quantas sementes a resolvem, definido como acurácia acima de 90\%.
+
+\subsection{Experimentos numéricos de memória longa}
+Estes experimentos não envolvem treino e isolam o efeito de cada aproximação (\path{sw/long_range_experiment.py}).
+\begin{description}
+  \item[E1 (erro da aproximação).] Para 2.000 valores de $\bar{A}$ igualmente espaçados em $[0{,}90;\,0{,}999]$, calcula o valor quantizado $\hat{A}$ de cada esquema, o número de níveis distintos usados, o erro absoluto máximo $|\hat{A} - \bar{A}|$ e o erro relativo mediano da constante de tempo, $|\hat\tau - \tau|/\tau$ com $\tau = -1/\ln \bar{A}$ ($\hat\tau = \infty$ se $\hat{A} = 1$).
+  \item[E2 (leitura após $L$ passos).] Simula 8 cabeças com $\tau$ espaçado logaritmicamente de 16 até $L$, 16 canais e 16 estados, um estímulo forte em $t=0$ seguido de ruído, com $L$ de 64 a 16.384 (5 sementes). Só $\bar{A}$ é quantizado; o resto é ponto flutuante. A métrica é a relação sinal-ruído de quantização da saída final, $\mathrm{SQNR} = 10\log_{10}\big(\sum y^2 / \sum (\hat{y}-y)^2\big)$, em que $y$ é a saída com $\bar{A}$ exato e $\hat{y}$ a quantizada.
+  \item[E3 (impulso no estado inteiro).] Injeta um impulso ($B x = 64 \cdot 64$) no estado inteiro do modelo de referência, com $\bar{A} = 1 - 2^{-k}$ e $k \in \{4, 6, 8, 10, 12\}$, e acompanha $h_t$ por $4\tau$ passos. Mede a razão $h_t/h_t^{\mathrm{ideal}}$ no fim, que deve ser 1; um valor maior que 1 indica que o estado congelou.
+  \item[E4 (SQNR do \emph{datapath}).] Alimenta o \emph{scan} inteiro com entradas INT8 aleatórias por $T=4.096$ passos ($k \in [4,12]$, $j = k-1$, 3 sementes) e compara com a mesma recorrência em ponto flutuante usando os \emph{mesmos} códigos quantizados. Assim mede apenas o erro introduzido pela aritmética inteira, e não pela aproximação de $\bar{A}$.
+\end{description}
+
+\subsection{Métricas de hardware}
+Cada variante da \emph{lane} ($N=16$) é compilada isoladamente no \QuartusVersion{} para o dispositivo \texttt{5CSEBA6U23I7} por \path{sw/synth_quartus.py}, com o fluxo completo (síntese, posicionamento e roteamento, análise de \emph{timing}). Para caracterizar o bloco sem a influência dos pinos do chip, todas as portas exceto o relógio são declaradas pinos virtuais. O relógio tem restrição de 200\,MHz e o esforço de otimização é ``alto desempenho''. Reportamos ALMs, registradores e blocos DSP do relatório do \emph{fitter} e a frequência máxima (F$_{\max}$) no canto lento a 1100\,mV e 100\,$^\circ$C, o pior caso para o grau industrial deste dispositivo. Como as variantes têm a mesma vazão (um token por ciclo), a comparação é feita em recursos e F$_{\max}$ por \emph{lane}.
+
+\subsection{Reprodutibilidade}
+A Tabela~\ref{tab:repro} lista os comandos, executados a partir de \path{sw/}. O script \path{make_paper_assets.py} gera, a partir dos JSON, as tabelas, a figura e as macros \LaTeX{} com cada número citado no texto; nenhum número do artigo é digitado à mão.
+
+\begin{table}[htb]
+\centering
+\caption{Etapas de reprodução.}
+\label{tab:repro}
+\footnotesize
+\begin{tabular}{lll}
+\toprule
+\textbf{Etapa} & \textbf{Comando} & \textbf{Saída em \path{sw/results/}} \\
+\midrule
+Verificação do RTL & \texttt{python3 verify\_rtl.py} & \texttt{rtl\_verification.json} \\
+Experimentos E1--E4 & \texttt{python3 long\_range\_experiment.py} & \texttt{long\_range\_results.json} \\
+Ablação QAT (GPU) & \texttt{python3 train\_ablation.py} & \texttt{ablation\_<tarefa>.json} \\
+Síntese Quartus & \texttt{python3 synth\_quartus.py} & \texttt{quartus\_dse.json} \\
+Tabelas, figura e macros & \texttt{python3 make\_paper\_assets.py} & \texttt{paper/generated/} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =============================================================================
+\section{Resultados}
+\label{sec:res}
+% =============================================================================
+
+Os resultados estão organizados pelas questões de pesquisa, começando pelas que não dependem de treino.
+
+\subsection{QP1: aproximação do coeficiente}
+
+\begin{table}[htb]
+\centering
+\caption{E1 e E2: quantização de $\bar{A} \in [0{,}90;\,0{,}999]$ (níveis distintos usados, erro absoluto máximo, erro relativo mediano de $\tau$) e SQNR (dB) da leitura $y_L$ com estado em ponto flutuante (média de 5 sementes). Maior SQNR é melhor.}
 \label{tab:abar}
 \footnotesize
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{llccccccc}
 \toprule
-\textbf{Esquema} & \textbf{Hardware} & \textbf{N\'{\i}veis} & \textbf{m\'{a}x $|\Delta\bar{A}|$} & \textbf{Erro $\tau$} & \textbf{$L=256$} & \textbf{$L=4.096$} & \textbf{$L=16.384$} \\
+\textbf{Esquema} & \textbf{Hardware} & \textbf{Níveis} & \textbf{máx $|\Delta\bar{A}|$} & \textbf{Erro $\tau$} & \textbf{$L=256$} & \textbf{$L=4.096$} & \textbf{$L=16.384$} \\
 \midrule
 \input{generated/tab_abar.tex}
 \end{tabular}}
 \end{table}
 
-A Tabela~\ref{tab:abar} e a Figura~\ref{fig:longmem}(a) mostram o comportamento esperado do PoT simples. Com $k\geq1$, todos os valores da faixa viram $0{,}5$: o erro mediano de $\tau$ \'{e} \TauErrPot{} e o SQNR fica em 0~dB. Com $k\geq0$, todos viram $1$ e o estado deixa de esquecer: a dire\c{c}\~{a}o da leitura dos canais lentos \'{e} preservada, mas sua magnitude diverge (SQNR negativo). O CPoT usa \LevelsCpot{} n\'{\i}veis na faixa com erro mediano de $\tau$ de \TauErrCpot{}; o CPoT-2 reduz esse erro para \TauErrCpotTwo{}. O Q1.15 com multiplicador continua sendo o mais preciso.
+A Tabela~\ref{tab:abar} e a Figura~\ref{fig:longmem}(a) confirmam o que a Seção~\ref{sec:fund} antecipa para o PoT simples. Com $k\geq1$, todos os valores da faixa viram $0{,}5$: o erro mediano de $\tau$ é \TauErrPot{} e o SQNR é 0~dB, ou seja, a saída não carrega nenhuma informação do estímulo. Com $k\geq0$, todos viram $1$ e o estado nunca esquece: a leitura dos canais lentos aponta na direção certa, mas sua magnitude cresce sem controle e o SQNR fica negativo. O CPoT usa \LevelsCpot{} níveis na faixa e tem erro mediano de $\tau$ de \TauErrCpot{}; o CPoT-2 reduz esse erro para \TauErrCpotTwo{}. O multiplicador Q1.15 continua sendo o mais preciso. \textbf{Resposta à QP1:} entre as opções só com deslocamentos, o CPoT é a única que mantém constantes de tempo longas com erro limitado.
 
 \begin{figure}[htb]
   \centering
   \includegraphics[width=\textwidth]{fig_long_memory.pdf}
-  \caption{(a) E2: SQNR da leitura $y_L$ em fun\c{c}\~{a}o de $L$ (estado em float). (b) E3: resposta ao impulso do estado inteiro do RTL com $\bar{A}=1-2^{-10}$. O estado legado de 16 bits congela pouco antes de $2\tau$; o estado corrigido segue a curva ideal.}
+  \caption{(a) E2: SQNR da leitura $y_L$ em função de $L$ (estado em ponto flutuante). (b) E3: resposta ao impulso do estado inteiro com $\bar{A}=1-2^{-10}$. O estado legado de 16 bits congela pouco antes de $2\tau$; o estado corrigido segue a curva ideal.}
   \label{fig:longmem}
 \end{figure}
 
+\subsection{QP2: precisão do estado inteiro}
+
 \begin{table}[htb]
 \centering
-\caption{E3 e E4: estado inteiro do RTL. Raz\~{a}o $h_t/h_t^{\mathrm{ideal}}$ ap\'{o}s $4\tau$ passos de um impulso ($\bar{A} = 1-2^{-k}$) e SQNR do \emph{datapath} inteiro com entradas aleat\'{o}rias (3 sementes).}
+\caption{E3 e E4: estado inteiro do RTL. Razão $h_t/h_t^{\mathrm{ideal}}$ após $4\tau$ passos de um impulso com $\bar{A} = 1-2^{-k}$ (1,00 é o ideal) e SQNR do \emph{datapath} inteiro com entradas aleatórias (3 sementes).}
 \label{tab:state}
 \footnotesize
 \resizebox{\textwidth}{!}{%
@@ -217,13 +401,13 @@ A Tabela~\ref{tab:abar} e a Figura~\ref{fig:longmem}(a) mostram o comportamento 
 \end{tabular}}
 \end{table}
 
-A Tabela~\ref{tab:state} confirma a an\'{a}lise da Se\c{c}\~{a}o~\ref{sec:precisao}. Com o estado legado (16 bits, truncamento), ap\'{o}s $4\tau$ o estado vale \ImpLegacyTwelve$\times$ o ideal para $k=12$ (e \ImpLegacyEight$\times$ j\'{a} para $k=8$), e o SQNR do \emph{datapath} cai para \SqnrLegacy~dB. Com 32 bits, 10 bits de guarda e arredondamento, a resposta ao impulso coincide com a ideal e o SQNR sobe para \SqnrProposed~dB, no mesmo n\'{\i}vel do baseline com multiplicador (\SqnrMult~dB).
+A Tabela~\ref{tab:state} confirma a análise da Seção~\ref{sec:precisao}. Com o estado legado (16 bits, truncamento), depois de $4\tau$ passos o estado vale \ImpLegacyTwelve$\times$ o ideal para $k=12$ (e já \ImpLegacyEight$\times$ para $k=8$): ele parou de decair. O SQNR do \emph{datapath} cai para \SqnrLegacy~dB. Com 32 bits, 10 bits de guarda e arredondamento, a resposta ao impulso coincide com a ideal e o SQNR sobe para \SqnrProposed~dB, no mesmo nível do baseline com multiplicador (\SqnrMult~dB). \textbf{Resposta à QP2:} o CPoT só funciona com estado de 32 bits, bits de guarda e arredondamento; a implementação ingênua de 16 bits destrói exatamente os canais de memória longa que o CPoT pretende preservar.
 
-\subsection{Abla\c{c}\~{a}o QAT}
+\subsection{QP3: acurácia dos modelos treinados}
 
 \begin{table}[htb]
 \centering
-\caption{Acur\'{a}cia de teste (\%, m\'{e}dia $\pm$ desvio padr\~{a}o entre sementes). $^\dagger$/$^\ddagger$: o mesmo modelo treinado, avaliado com o \emph{scan} inteiro bit-exato do RTL.}
+\caption{Acurácia de teste (\%, média $\pm$ desvio padrão entre sementes). $^\dagger$/$^\ddagger$: o mesmo modelo treinado, avaliado com o \emph{scan} inteiro bit-exato do RTL (configuração proposta e legada).}
 \label{tab:ablation}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
@@ -231,89 +415,71 @@ A Tabela~\ref{tab:state} confirma a an\'{a}lise da Se\c{c}\~{a}o~\ref{sec:precis
 \input{generated/tab_ablation.tex}}
 \end{table}
 
-A Tabela~\ref{tab:ablation} leva a cinco observa\c{c}\~{o}es.
+% TODO(ablação): discussão a escrever após a execução completa de train_ablation.py
+\textbf{[Discussão da ablação pendente: aguardando a execução completa das configurações S0--S6.]}
 
-\textbf{ECG5000.} Todas as configura\c{c}\~{o}es ficam a menos de 0,5 ponto percentual da refer\^{e}ncia FP32 (\acc{ecg}{A0}\%), exceto o PoT com $k\geq1$ (\acc{ecg}{A5}\%); o CPoT com \emph{scan} de hardware obt\'{e}m \acc{ecg}{A7}\%. A acur\'{a}cia balanceada fica perto de 52\% em todas as configura\c{c}\~{o}es, inclusive FP32: com 500 s\'{e}ries de treino, as classes minorit\'{a}rias n\~{a}o s\~{a}o aprendidas, o que \'{e} uma limita\c{c}\~{a}o do modelo e do protocolo, n\~{a}o da quantiza\c{c}\~{a}o. Como $L=140$, o estado legado de 16 bits n\~{a}o chega a prejudicar (\acc{ecg}{A7cpots16}\%).
-
-\textbf{Recorda\c{c}\~{a}o com $L=256$.} Todas as configura\c{c}\~{o}es resolvem a tarefa (acur\'{a}cia acima de 90\% em \solved{cueA}{A7} sementes no CPoT), exceto o PoT com $k\geq1$ (\acc{cueA}{A5}\%, n\'{\i}vel de acaso), que n\~{a}o consegue representar $\bar{A}_t > 0{,}5$.
-
-\textbf{Recorda\c{c}\~{a}o com $L=1024$.} FP32, W8A8 e PoT com $k\geq0$ resolvem todas as sementes. Os modelos tern\'{a}rios, \emph{com qualquer} decaimento (A2, A3, A4, A7, A8), resolvem no m\'{a}ximo uma de tr\^{e}s sementes (acur\'{a}cia acima de 90\% em \solved{cueB}{A3} sementes em A3 e em \solved{cueB}{A7} em A7, cuja melhor semente acerta parcialmente); nas demais sementes eles ficam no n\'{\i}vel de acaso. O gargalo nesse comprimento \'{e} a otimiza\c{c}\~{a}o dos pesos tern\'{a}rios dentro do or\c{c}amento usado (20 \'{e}pocas, \TrainCueB{} sequ\^{e}ncias), e n\~{a}o a discretiza\c{c}\~{a}o de $\bar{A}_t$; com 3 sementes, os desvios s\~{a}o grandes e as m\'{e}dias de A2--A8 n\~{a}o permitem ordenar os esquemas.
-
-\textbf{CPoT $\times$ PoT com $k\geq0$.} Nessas tarefas o PoT com $k\geq0$ empata com o CPoT ($L=256$) ou o supera ($L=1024$). A tarefa de recorda\c{c}\~{a}o s\'{o} exige reter informa\c{c}\~{a}o ($\bar{A}_t \to 1$), e o $\Delta_t$ seletivo permite zerar o estado quando necess\'{a}rio; ela n\~{a}o exige constantes de tempo intermedi\'{a}rias, que \'{e} onde o CPoT se diferencia (E1 e E2). Mostrar essa vantagem em acur\'{a}cia exige uma tarefa com esquecimento gradual e ainda est\'{a} em aberto. A FWHT (A2 $\to$ A3) tamb\'{e}m n\~{a}o mostrou efeito mensur\'{a}vel nessas tarefas, que n\~{a}o t\^{e}m canais de \emph{outlier}.
-
-\textbf{Aritm\'{e}tica inteira do RTL.} Avaliar o modelo treinado com o \emph{scan} inteiro bit-exato reproduz a acur\'{a}cia em ponto flutuante (A4$^\dagger$ e A7$^\dagger$, diferen\c{c}as de no m\'{a}ximo alguns d\'{e}cimos). Com o estado legado (A7$^\ddagger$), o mesmo modelo cai de \acc{cueA}{A7cpots32}\% para \acc{cueA}{A7cpots16}\% em $L=256$ e de \acc{cueB}{A7cpots32}\% para \acc{cueB}{A7cpots16}\% em $L=1024$: o problema de precis\~{a}o da Se\c{c}\~{a}o~\ref{sec:precisao} tamb\'{e}m aparece numa tarefa treinada.
-
-Nos modelos tern\'{a}rios treinados, \ZeroFrac{} dos pesos das proje\c{c}\~{o}es valem zero (m\'{e}dia de A7). As proje\c{c}\~{o}es ocupam \ProjKiBfp{}~KiB em FP16, \ProjKiBint{}~KiB em INT8, \ProjKiBtwo{}~KiB em 2 bits e \ProjKiBrthree{}~KiB em Radix-3.
-
-\subsection{Verifica\c{c}\~{a}o do RTL}
+\subsection{Corretude do RTL}
 
 \begin{table}[htb]
 \centering
-\caption{Verifica\c{c}\~{a}o RTL $\times$ modelo de refer\^{e}ncia inteiro (Icarus Verilog 12).}
+\caption{Verificação da \emph{lane} de \emph{scan} contra o modelo de referência inteiro (Icarus Verilog 12).}
 \label{tab:verif}
 \footnotesize
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lccc}
+\begin{tabular}{lcc}
 \toprule
-\textbf{M\'{o}dulo} & \textbf{Configura\c{c}\~{o}es} & \textbf{Sa\'{\i}das comparadas} & \textbf{Diverg\^{e}ncias} \\
+\textbf{Configuração} & \textbf{Saídas comparadas} & \textbf{Divergências} \\
 \midrule
 \input{generated/tab_verification.tex}
-\end{tabular}}
+\end{tabular}
 \end{table}
 
-Todos os \VerTests{} testes da Tabela~\ref{tab:verif} terminam com zero diverg\^{e}ncias. Nenhum teste foi executado em hardware.
+As três configurações da Tabela~\ref{tab:verif} terminam com zero divergências, e o mutante sem arredondamento foi detectado (780 de 2.048 saídas divergentes). Junto com a emulação inteira da QP3, isso liga a acurácia medida em software ao circuito: o RTL produz, bit a bit, a mesma aritmética que foi avaliada nos modelos treinados.
 
-\subsection{Recursos estimados (Yosys, Cyclone~V)}
+\subsection{QP4: custo em hardware}
 
 \begin{table}[htb]
 \centering
-\caption{Motor matriz-vetor ($K=\EngK$, $M=\EngM$): c\'{e}lulas mapeadas pelo Yosys para Cyclone~V. Ciclos: $MK/P + \log_2 P + 3$, confirmado em simula\c{c}\~{a}o. Sem ALMs/F$_{\max}$ do Quartus.}
-\label{tab:engine}
+\caption{\emph{Lane} de \emph{scan} ($N=16$ estados, um token por ciclo) compilada no \QuartusVersion{} para a Cyclone~V \texttt{5CSEBA6U23I7}. F$_{\max}$ no canto lento (1100\,mV, 100\,$^\circ$C).}
+\label{tab:quartus}
 \footnotesize
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lcccccccc}
+\begin{tabular}{lcccc}
 \toprule
-\textbf{Pesos} & \textbf{$P$} & \textbf{bit/peso} & \textbf{LUTs} & \textbf{\emph{Carry}} & \textbf{FFs} & \textbf{M10K} & \textbf{Mult. 9$\times$9} & \textbf{Ciclos} \\
+\textbf{Variante} & \textbf{ALMs} & \textbf{Registradores} & \textbf{Blocos DSP} & \textbf{F$_{\max}$ (MHz)} \\
 \midrule
-\input{generated/tab_yosys_engine.tex}
-\end{tabular}}
+\input{generated/tab_quartus.tex}
+\end{tabular}
 \end{table}
 
-\begin{table}[htb]
-\centering
-\caption{Blocos do \emph{scan} ($N=16$ estados) e auxiliares: c\'{e}lulas mapeadas pelo Yosys para Cyclone~V e blocos DSP estimados.}
-\label{tab:blocks}
-\footnotesize
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{lccccccc}
-\toprule
-\textbf{Bloco} & \textbf{LUTs} & \textbf{\emph{Carry}} & \textbf{FFs} & \textbf{9$\times$9} & \textbf{18$\times$18} & \textbf{27$\times$27} & \textbf{DSP est.} \\
-\midrule
-\input{generated/tab_yosys_blocks.tex}
-\end{tabular}}
-\end{table}
+A Tabela~\ref{tab:quartus} mostra a troca que o CPoT faz. A \emph{lane} proposta usa \DspCpot{} blocos DSP contra \DspMult{} do baseline com multiplicador (\DspSaving{} a menos): os 16 multiplicadores do decaimento desaparecem, e os DSPs restantes vêm de $B_t x_t$ e $C_t h_t$, que continuam sendo multiplicações. Em troca, a lógica sobe de \AlmMult{} para \AlmCpot{} ALMs, por causa dos 16 deslocadores variáveis de 32 bits com arredondamento. A F$_{\max}$ das duas é parecida (\FmaxCpot{} contra \FmaxMult{}~MHz): em ambas, o caminho crítico é o laço de 1 ciclo da recorrência, que inclui o decaimento, a soma e a saturação de 32 bits. A versão legada de 16 bits é menor e mais rápida, mas, como mostra a QP2, está numericamente errada.
 
-\textbf{Proje\c{c}\~{o}es (Tabela~\ref{tab:engine}).} Os motores tern\'{a}rios n\~{a}o usam multiplicadores, enquanto o INT8 usa um 9$\times$9 por via (\MulIntA{} com $P=16$). Com $P=16$, a mem\'{o}ria de pesos cai de \MtenkIntA{} blocos M10K (INT8) para \MtenkTwoA{} (2-bit) e \MtenkRthreeA{} (Radix-3). O Radix-3 custa LUTs: \LutRthreeA{} contra \LutTwoA{} no 2-bit com $P=16$, porque cada via tem um decodificador (\LutDec{} LUTs) e um multiplexador 5:1. Com $P=64$ a vantagem em M10K desaparece (\MtenkTwoC{} contra \MtenkRthreeC{} blocos): a largura da palavra, e n\~{a}o o total de bits, define o n\'{u}mero de blocos, enquanto o custo em LUTs sobe para \LutRthreeC{} contra \LutTwoC. A economia de 20\% em bits do Radix-3 s\'{o} se traduz em blocos quando a geometria da mem\'{o}ria permite, ou em banda quando os pesos v\^{e}m da DRAM, regime que n\~{a}o foi medido.
-
-\textbf{\emph{Scan} (Tabela~\ref{tab:blocks}).} O decaimento CPoT elimina os multiplicadores $h \cdot \bar{A}$: a \emph{lane} proposta usa \DspCpot{} blocos DSP estimados contra \DspMult{} do baseline Q1.15, ao custo de mais l\'{o}gica (\LutCpot{} contra \LutMult{} LUTs, devido ao deslocador de 32 bits). Os DSPs restantes v\^{e}m de $B_t x_t$ e $C_t h_t$, que continuam sendo multiplica\c{c}\~{o}es. A Cyclone~V \texttt{5CSEBA6U23I7} tem 112 blocos DSP, ent\~{a}o o n\'{u}mero de \emph{lanes} paralelas \'{e} limitado por DSP no baseline e por esses produtos no CPoT.
+Na Cyclone~V, com 112 blocos DSP, o número de \emph{lanes} paralelas é limitado pelos DSPs: cabem \LanesCpot{} \emph{lanes} CPoT contra \LanesMult{} do baseline, e a lógica não é o limite (\AlmCpot{} ALMs por \emph{lane}, de 41.910). Para a mesma vazão, os DSPs que o CPoT libera ficam disponíveis para as projeções lineares do modelo, as maiores consumidoras de multiplicadores. \textbf{Resposta à QP4:} o CPoT troca multiplicadores por lógica sem perder frequência; o ganho é relevante onde multiplicadores são o recurso escasso.
 
 % =============================================================================
-\section{Limita\c{c}\~{o}es e Pr\'{o}ximos Passos}
+\section{Limitações e Próximos Passos}
 \label{sec:limitacoes}
 % =============================================================================
 
 \begin{itemize}
-  \item \textbf{Sem Quartus e sem placa.} Os recursos s\~{a}o c\'{e}lulas do Yosys, n\~{a}o ALMs do \emph{fitter}, e n\~{a}o h\'{a} F$_{\max}$, \emph{throughput}, lat\^{e}ncia nem pot\^{e}ncia. A pr\'{o}xima etapa \'{e} rodar \path{synth_quartus.py} e medir na DE10-Nano (ARM via ponte AXI, contadores de ciclo, medidor de corrente na alimenta\c{c}\~{a}o).
-  \item \textbf{Integra\c{c}\~{a}o incompleta.} RMSNorm, quantiza\c{c}\~{a}o din\^{a}mica, \texttt{Conv1D}, SiLU e o controle do bloco n\~{a}o est\~{a}o em RTL. No QAT, a FWHT recebe a ativa\c{c}\~{a}o em ponto flutuante; no hardware, ela receber\'{a} INT8 j\'{a} quantizado.
-  \item \textbf{Escala.} Modelos pequenos ($\approx$\NParams{} par\^{a}metros) e tarefas de classifica\c{c}\~{a}o; a tarefa de recorda\c{c}\~{a}o \'{e} sint\'{e}tica. Modelos de linguagem e o regime com pesos na DRAM (\emph{memory-bound}) n\~{a}o foram avaliados.
-  \item \textbf{Alternativas de motor.} Multiplica\c{c}\~{a}o por tabela (TLMM) e salto de pesos nulos n\~{a}o foram implementados nesta vers\~{a}o.
+  \item \textbf{Métricas relativas.} Os recursos e a F$_{\max}$ vêm de uma FPGA de 28\,nm e servem para comparar variantes da unidade no mesmo dispositivo. Área e energia num processo ASIC, que é a métrica natural para uma unidade dentro de uma GPU ou NPU, não foram medidas; o próximo passo é sintetizar o mesmo RTL com um fluxo ASIC aberto. Não houve execução em placa.
+  \item \textbf{Frequência.} O laço de 1 ciclo limita a F$_{\max}$ a cerca de 65--70\,MHz nas duas variantes. Intercalar canais no laço (processar outro canal enquanto o primeiro termina) permitiria dividir a recorrência em mais estágios, e não foi explorado.
+  \item \textbf{Escopo do modelo.} Só o \emph{scan} foi implementado em RTL; projeções, convolução, normalizações e o controle do bloco ficam fora. Na GPU, o \emph{scan} só é executado como recorrência na geração token a token; o treino e o processamento de entradas inteiras usam a forma em blocos, que esta unidade não acelera.
+  \item \textbf{Escala e tarefas.} Modelos pequenos ($\approx$\NParams{} parâmetros) e tarefas de classificação, duas delas sintéticas. Modelos de linguagem não foram avaliados.
+  \item \textbf{Validade estatística.} 5 sementes (3 com $L=1024$) bastam para separar ``resolve'' de ``não resolve'', mas não para ordenar configurações com médias próximas.
 \end{itemize}
 
 % =============================================================================
-\section{Conclus\~{a}o}
+\section{Conclusão}
+\label{sec:conc}
 % =============================================================================
 
-Apresentamos o BitMamba-CV, um co-projeto de Mamba-2 tern\'{a}rio e de um \emph{datapath} de \emph{scan} para a Intel Cyclone~V, com especifica\c{c}\~{a}o inteira \'{u}nica, RTL verificado bit a bit (\VerTotal{} sa\'{\i}das, \VerMism{} diverg\^{e}ncias) e todos os n\'{u}meros gerados a partir dos resultados. Tr\^{e}s conclus\~{o}es se sustentam com os dados atuais. (i) A discretiza\c{c}\~{a}o CPoT representa constantes de tempo longas com um deslocamento e uma subtra\c{c}\~{a}o (erro mediano de $\tau$ de \TauErrCpot{} em $[0{,}90;\,0{,}999]$, contra \TauErrPot{} do PoT com $k\geq1$) e reduz os blocos DSP estimados da \emph{lane} de \emph{scan} de \DspMult{} para \DspCpot. (ii) Essa discretiza\c{c}\~{a}o s\'{o} \'{e} correta com estado de 32 bits, bits de guarda e arredondamento: o estado de 16 bits truncado congela a mem\'{o}ria longa, derruba o SQNR do \emph{datapath} de \SqnrProposed{} para \SqnrLegacy~dB e a acur\'{a}cia da tarefa de recorda\c{c}\~{a}o com $L=256$ de \acc{cueA}{A7cpots32}\% para \acc{cueA}{A7cpots16}\%. (iii) O modelo tern\'{a}rio com \emph{scan} inteiro mant\'{e}m a acur\'{a}cia FP32 no ECG5000 e na recorda\c{c}\~{a}o com $L=256$; com $L=1024$, o treinamento tern\'{a}rio n\~{a}o converge na maioria das sementes. Ficam em aberto: a vantagem do CPoT sobre o PoT com $k\geq0$ em acur\'{a}cia, a s\'{\i}ntese no Quartus (ALMs e F$_{\max}$) e a valida\c{c}\~{a}o na placa DE10-Nano (lat\^{e}ncia e pot\^{e}ncia).
+Este trabalho investigou se o multiplicador do decaimento na unidade de \emph{scan} do Mamba-2 pode ser substituído por deslocamento e subtração. Propusemos o coeficiente CPoT, analisamos a precisão de estado que ele exige e avaliamos uma \emph{lane} de \emph{scan} em RTL, conferida bit a bit contra um modelo de referência (\VerTotal{} saídas, \VerMism{} divergências) e caracterizada numa Cyclone~V. As respostas às questões de pesquisa foram:
+\begin{description}
+  \item[QP1.] O CPoT representa constantes de tempo longas com um deslocamento e uma subtração (erro mediano de $\tau$ de \TauErrCpot{}, contra \TauErrPot{} do PoT com $k\geq1$).
+  \item[QP2.] O estado precisa de 32 bits, bits de guarda e arredondamento: o estado ingênuo de 16 bits congela a memória longa e derruba o SQNR do \emph{datapath} de \SqnrProposed{} para \SqnrLegacy~dB.
+  \item[QP3.] \textbf{[pendente: aguardando a ablação S0--S6.]}
+  \item[QP4.] A \emph{lane} CPoT usa \DspSaving{} menos blocos DSP que o baseline com multiplicador (\DspCpot{} contra \DspMult), com F$_{\max}$ equivalente e mais lógica.
+\end{description}
+Ficam em aberto a caracterização em processo ASIC (área e energia), a divisão do laço da recorrência em mais estágios e a avaliação em modelos de linguagem.
 
 \bibliographystyle{plain}
 \bibliography{references}

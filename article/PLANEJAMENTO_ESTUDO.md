@@ -1,36 +1,30 @@
-# Status do Estudo (atualizado em 2026-11-08)
+# Status do Estudo (atualizado em 2026-11-09)
 
-> O plano abaixo (seções 1–6) é o plano original. Vários itens foram **corrigidos ou removidos** após auditoria; este quadro prevalece sobre o texto antigo.
+> **Escopo atual: só o SSM.** O estudo é a unidade de *scan* do Mamba-2: decaimento CPoT sem multiplicador e precisão do estado inteiro. A FPGA (Cyclone V, via Quartus) é **instrumento de medida**, não o sistema-alvo. Projeções ternárias, H-BitLinear, Radix-3 e FWHT saíram do paper (o RTL deles continua em `hw/rtl/`, verificado, mas sem uso). O plano original (seções 1–6, abaixo) está desatualizado; este quadro prevalece.
 
-## Feito e executado (resultados em `sw/results/`, todos os números do paper gerados por `sw/make_paper_assets.py`)
+## Feito e executado (resultados em `sw/results/`; todos os números do paper gerados por `sw/make_paper_assets.py`)
 | Item | Script | Resultado |
 |---|---|---|
-| Golden model inteiro (especificação única do RTL) | `sw/models/golden_model_bitexact.py` | self-test |
-| RTL: `bitlinear_engine` (INT8 / ternário 2-bit / Radix-3 1,6 bit), `fwht16`, `scan_lane` (CPoT ou mult. Q1.15, largura de estado parametrizável), `radix3_decoder`, `adder_tree` | `hw/rtl/` | — |
-| Verificação RTL × golden (Icarus Verilog) + mutantes | `sw/verify_rtl.py` | `rtl_verification.json` (0 divergências) |
-| Experimentos numéricos E1–E4 (quantização de Ā, estado inteiro 16 b vs 32 b) | `sw/long_range_experiment.py` | `long_range_results.json` |
-| QAT + ablação A0–A8, ECG5000 e recordação atrasada L=256/1024, com emulação inteira bit-exata | `sw/train_ablation.py` | `ablation_*.json` |
-| Estimativa de recursos Cyclone V (Yosys `synth_intel_alm`) | `sw/synth_yosys.py` | `yosys_dse.json` |
+| Modelo de referência inteiro do *scan* | `sw/models/golden_model_bitexact.py` | autoteste |
+| RTL `scan_lane` (CPoT ou mult. Q1.15; largura de estado, guarda e arredondamento parametrizáveis) | `hw/rtl/scan_lane.v` | — |
+| Verificação RTL × referência (Icarus Verilog) + mutante | `sw/verify_rtl.py` | `rtl_verification.json` (0 divergências) |
+| Experimentos E1–E4 (quantização de Ā, estado 16 b × 32 b) | `sw/long_range_experiment.py` | `long_range_results.json` |
+| Ablação S0–S6 (projeções W8A8 fixas, só o *scan* muda): ECG5000, recordação L=256/1024, maioria em janela L=512 | `sw/train_ablation.py` | `ablation_*.json` |
+| Síntese completa no Quartus Prime Lite 25.1 (ALMs, DSP, Fmax a 100 °C) | `sw/synth_quartus.py` | `quartus_dse.json` |
 
-## Correções em relação ao plano original
-- Estado Q8.8 de 16 bits com shift truncado **congela** canais de memória longa → estado de 32 bits, 10 bits de guarda, arredondamento.
-- Δ_t agora é potência de dois e (m,k) vem por token (o scan é seletivo); x/B/C usam escalas estáticas PoT (inteiro coerente).
-- Radix-3 de fato a 1,6 bit/peso (5 linhas por palavra de 8P bits); antes a palavra de 32 bits dava 2,0 bit/peso.
-- PoT de LightMamba/FastMamba é nos **fatores de escala**, não em Ā: o paper não atribui mais o "PoT em Ā" a eles.
-- Removidos: DSE/roofline/potência/Tokens-por-Joule gerados por fórmulas, TLMM e Zero-Skip (sem RTL), seção GPU/NPU.
-
-## Pendente (fora do paper até rodar)
-1. **Quartus Prime Lite** (download manual no site da Altera; requer navegador) → `QUARTUS_BIN=... python3 sw/synth_quartus.py` (ALMs, M10K, DSP, Fmax 85 °C). Não precisa de placa.
-2. RTL faltante: RMSNorm, quantização dinâmica, Conv1D, SiLU, controle do bloco, wrapper Avalon/AXI para o HPS.
-3. **Placa DE10-Nano**: sistema HPS (Platform Designer/GHRD), driver Linux, latência com contadores de ciclo, potência com medidor na alimentação de 5 V.
+## Pendente
+1. Opcional, para fortalecer: síntese ASIC com fluxo aberto (Yosys + OpenROAD, PDK Nangate45/ASAP7) para área e energia da *lane* CPoT × multiplicador.
+2. Opcional: dividir o laço de 1 ciclo intercalando canais (Fmax hoje ≈ 65–70 MHz nas duas variantes).
+3. **Placa DE10-Nano: não é necessária** neste escopo.
 
 ## Como reproduzir
 ```bash
 cd article/sw
 python3 verify_rtl.py            # IVL_ROOT=~/opt/eda/usr se o iverilog não estiver no PATH
 python3 long_range_experiment.py
-python3 train_ablation.py        # GPU recomendada (~3-5 h no total)
-python3 synth_yosys.py           # YOSYS=~/opt/eda/usr/bin/yosys
+python3 train_ablation.py        # GPU, ~4 h
+# Quartus no Windows, chamado do WSL (build em /mnt/c, não em \\wsl$):
+QUARTUS_BIN=/mnt/c/altera_lite/25.1std/quartus/bin64 QUARTUS_BUILD=/mnt/c/Users/andre/qbuild python3 synth_quartus.py
 python3 make_paper_assets.py && cd ../paper && pdflatex main && bibtex main && pdflatex main && pdflatex main
 ```
 
