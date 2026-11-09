@@ -5,3 +5,10 @@
 *.fls
 *.fdb_latexmk
 *.aux
+article/sw/data/
+article/hw/tb/vectors/
+article/hw/tb/build/
+article/sw/logs/
+__pycache__/
+*.vcd
+article/hw/quartus/build/

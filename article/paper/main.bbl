@@ -1,5 +1,12 @@
 \begin{thebibliography}{10}
 
+\bibitem{ecg5000}
+Yanping Chen, Eamonn Keogh, Bing Hu, Nurjahan Begum, Anthony Bagnall, Abdullah
+  Mueen, and Gustavo Batista.
+\newblock The {UCR} time series classification archive.
+\newblock \url{https://www.cs.ucr.edu/~eamonn/time_series_data/} (dataset
+  ECG5000), 2015.
+
 \bibitem{chiang2025quamba}
 Hung-Yueh Chiang, Chi-Chih Chang, Natalia Frumkin, and Diana Marculescu.
 \newblock Quamba: A post-training quantization recipe for selective state space
@@ -23,7 +30,7 @@ Tri Dao and Albert Gu.
 \newblock arXiv:2405.21060.
 
 \bibitem{ganesaraja2026ternarymamba}
-R.~Ganesaraja et~al.
+Ramprasath Ganesaraja, Sahil~Dilip Panse, and Swathika N.
 \newblock Ternary {Mamba}: Grouped quantization-aware training of {W1.58A16}
   state space models.
 \newblock {\em arXiv preprint arXiv:2606.18114}, 2026.
@@ -40,7 +47,7 @@ Intel Corporation (Altera).
   Integration}, 2023.
 
 \bibitem{li2024marca}
-Jinhao Li, ihao Huang, et~al.
+Jinhao Li, Shan Huang, Jiaming Xu, Jun Liu, Li~Ding, Ningyi Xu, and Guohao Dai.
 \newblock {MARCA}: {Mamba} accelerator with {ReConfigurable} architecture.
 \newblock In {\em IEEE/ACM International Conference on Computer-Aided Design
   (ICCAD)}, 2024.
@@ -58,10 +65,16 @@ Ye~Qiao et~al.
 \newblock {\em arXiv preprint arXiv:2504.16266}, 2025.
 
 \bibitem{tang2024bimamba}
-Shengkun Tang, Liqun Wang, et~al.
+Shengkun Tang, Liqun Ma, Haonan Li, Mingjie Sun, and Zhiqiang Shen.
 \newblock {Bi-Mamba}: Towards accurate 1-bit state space models.
 \newblock {\em Transactions on Machine Learning Research (TMLR)}, 2025.
 \newblock arXiv:2411.11843.
+
+\bibitem{fastmamba2025}
+Aotao Wang, Haikuo Shao, Shaobo Ma, and Zhongfeng Wang.
+\newblock {FastMamba}: A high-speed and efficient {Mamba} accelerator on {FPGA}
+  with accurate quantization.
+\newblock {\em arXiv preprint arXiv:2505.18975}, 2025.
 
 \bibitem{wang2025bitnetv2}
 Hongyu Wang, Shuming Ma, and Furu Wei.
@@ -70,17 +83,25 @@ Hongyu Wang, Shuming Ma, and Furu Wei.
 \newblock {\em arXiv preprint arXiv:2504.18415}, 2025.
 
 \bibitem{wei2024tmac}
-Jianyu Wei, Shijie Cao, imaan Ting, et~al.
+Jianyu Wei, Shijie Cao, Ting Cao, Lingxiao Ma, Lei Wang, Yanyong Zhang, and Mao
+  Yang.
 \newblock {T-MAC}: {CPU} renaissance via table lookup for low-bit {LLM}
   deployment on edge.
 \newblock In {\em European Conference on Computer Systems (EuroSys)}, 2025.
 \newblock arXiv:2407.00088.
 
 \bibitem{wei2025lightmamba}
-R.~Wei et~al.
+Renjie Wei, Songqiang Xu, Linfeng Zhong, Zebin Yang, Qingyu Guo, Yuan Wang,
+  Runsheng Wang, and Meng Li.
 \newblock {LightMamba}: Efficient {Mamba} acceleration on {FPGA} with
   quantization and hardware co-design.
-\newblock {\em arXiv preprint arXiv:2502.15260}, 2025.
+\newblock In {\em Design, Automation and Test in Europe (DATE)}, 2025.
+\newblock arXiv:2502.15260.
+
+\bibitem{yosys}
+Claire Wolf.
+\newblock Yosys open synthesis suite.
+\newblock \url{https://yosyshq.net/yosys/}, 2023.
 
 \bibitem{yin2025tereffic}
 Chenyang Yin, Zhenyu Bai, Pranav Venkatram, Shivam Aggarwal, Zhaoying Li, and
@@ -94,11 +115,5 @@ Zhenxuan Yu, Takeshi Kojima, Yutaka Matsuo, and Yusuke Iwasawa.
   toe.
 \newblock In {\em International Conference on Computational Linguistics
   (COLING)}, 2025.
-
-\bibitem{fastmamba2025}
-Y.~Zhang et~al.
-\newblock {FastMamba}: A high-speed and efficient {Mamba} accelerator on {FPGA}
-  with accurate quantization.
-\newblock {\em arXiv preprint arXiv:2505.18975}, 2025.
 
 \end{thebibliography}

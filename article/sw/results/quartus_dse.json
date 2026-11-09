@@ -1,0 +1,28 @@
+{
+  "tool": [
+    "Quartus Prime Shell",
+    "Version 25.1std.0 Build 1129 10/21/2025 SC Lite Edition",
+    "Copyright (C) 2025  Altera Corporation. All rights reserved."
+  ],
+  "device": "5CSEBA6U23I7",
+  "clock_constraint_mhz": 200,
+  "results": [
+    {
+      "name": "scan_cpot_s32_g10_round",
+      "params": {
+        "N": 16,
+        "STATE_W": 32,
+        "GUARD": 10,
+        "ROUND": 1,
+        "DECAY": 0
+      },
+      "alms": 3308,
+      "registers": 1420,
+      "block_memory_bits": 0,
+      "m10k": 0,
+      "dsp_blocks": 48,
+      "fmax_mhz_slow85": 69.07,
+      "restricted_fmax_mhz_slow85": 69.07
+    }
+  ]
+}

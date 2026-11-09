@@ -1,242 +1,183 @@
 """
-Experiment 2 (Addressing Review Points 1, 3, 5, 7, 11, 12):
-Full QAT Training from Scratch & 8-Step Ablation Study (A0..A7) across 3 Random Seeds.
+QAT ablation (A0..A8) on ECG5000 (real, L=140) and a delayed-cue recall task
+(synthetic, L in {256, 1024}); 5 seeds (3 for L=1024). For the hardware-scan configs the trained
+model is re-evaluated with the bit-exact integer scan of the RTL (golden model).
 
-Evaluates a 2-layer Mamba-2 (SSD) classifier on a Multi-Scale Long-Range Sequential
-Sensor/Bio-Signal Benchmark (L = 128, C = 4 classes) featuring:
-- Realistic structured channel outliers ( mimicking bio-potential / acoustic spike artifacts )
-- Long-range temporal dependencies (early cue at t in [0..15] combined with late modulation at t in [110..127])
-
-Reports (mean +- std across 3 seeds):
-- Test Accuracy (%)
-- Output SQNR (dB) vs. FP32 baseline
-- Ternary Weight Sparsity (% of W == 0)
-- Weight Footprint (KB) under FP32, INT8, 2-bit unpacked, and Radix-3 (1.6-bit)
+Usage: python3 train_ablation.py [--tasks ecg5000 cue256 cue1024] [--seeds N] [--configs ...]
+Writes results/ablation_<task>.json
 """
 
 from __future__ import annotations
+import argparse
+import io
 import json
 import os
 import time
-from typing import Dict, List, Tuple
+import urllib.request
+import zipfile
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 
-from models.mamba2_ssd_qat import (
-    BitMamba2Config,
-    BitMamba2SequenceModel,
-    HBitLinear,
-)
-from models.golden_model_bitexact import pack_radix3_weights
+from models.mamba2_ssd_qat import BitMamba2Config, BitMamba2SequenceModel
+from models.golden_model_bitexact import ScanCfg, LEGACY_16, PROPOSED_32, MULT_Q15
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = os.path.join(HERE, "data")
+ECG_URL = "https://www.timeseriesclassification.com/aeon-toolkit/ECG5000.zip"
 
 
-def generate_sequential_biosignal_dataset(
-    n_train: int = 320,
-    n_test: int = 128,
-    seq_len: int = 32,
-    input_dim: int = 16,
-    seed: int = 42,
-) -> Tuple[TensorDataset, TensorDataset]:
+# ------------------------------------------------------------------------------
+# data
+# ------------------------------------------------------------------------------
+
+def load_ecg5000():
+    d = os.path.join(DATA, "ECG5000")
+    if not os.path.exists(os.path.join(d, "ECG5000_TRAIN.txt")):
+        os.makedirs(d, exist_ok=True)
+        with urllib.request.urlopen(ECG_URL, timeout=120) as r:
+            zipfile.ZipFile(io.BytesIO(r.read())).extractall(d)
+
+    def read(split):
+        a = np.loadtxt(os.path.join(d, f"ECG5000_{split}.txt"))
+        x = torch.tensor(a[:, 1:], dtype=torch.float32).unsqueeze(-1)
+        y = torch.tensor(a[:, 0], dtype=torch.long) - 1
+        return TensorDataset(x, y)
+
+    return read("TRAIN"), read("TEST"), 1, 5
+
+
+def make_delayed_cue(L: int, n_train=4000, n_test=1000, seed=7):
     """
-    Generates a multi-scale sequential bio-signal / acoustic classification task (4 classes)
-    where class identity depends jointly on:
-      (1) An early frequency/phase burst in the first 6 timesteps (requires A_bar ~ 0.94-0.99 memory!)
-      (2) A late morphological pattern in the final 6 timesteps
-      (3) Structured outlier channels (2 channels have 14x amplitude spikes, testing FWHT smoothing!)
+    4 classes. The class is shown only during t < 8 (one-hot on channels 0..3,
+    amplitude 2); afterwards only Gaussian noise (std 0.1) on all 8 channels.
+    The label is read at t = L-1 -> requires memory of ~L steps.
     """
     g = torch.Generator().manual_seed(seed)
-    n_total = n_train + n_test
-    labels = torch.randint(0, 4, (n_total,), generator=g)
-
-    t = torch.linspace(0.0, 4.0 * np.pi, seq_len).unsqueeze(0).unsqueeze(-1)  # (1, L, 1)
-    x = torch.randn(n_total, seq_len, input_dim, generator=g) * 0.20
-
-    # Early cue (bit 0 of class label) at t in [0..6]
-    early_bit = ((labels & 1) * 2 - 1).float().view(-1, 1, 1)
-    early_env = torch.zeros(1, seq_len, 1)
-    early_env[:, :6, :] = 1.0
-    x[:, :, 0:4] += early_bit * early_env * 1.85 * torch.sin(2.0 * t)
-
-    # Late cue (bit 1 of class label) at t in [26..31]
-    late_bit = (((labels >> 1) & 1) * 2 - 1).float().view(-1, 1, 1)
-    late_env = torch.zeros(1, seq_len, 1)
-    late_env[:, 26:, :] = 1.0
-    x[:, :, 4:8] += late_bit * late_env * 1.65 * torch.cos(3.0 * t)
-
-    # Non-linear cross-modulation harmonic in channels 8..12
-    xor_sign = (early_bit * late_bit)
-    mid_env = torch.zeros(1, seq_len, 1)
-    mid_env[:, 10:22, :] = 1.0
-    x[:, :, 8:12] += xor_sign * mid_env * 1.35 * torch.sin(4.0 * t)
-
-    # Realistic heavy-tailed channel outliers on channels 14 & 15 (tests FWHT outlier suppression!)
-    outlier_carrier = torch.randn(n_total, seq_len, 2, generator=g) * 12.0
-    x[:, :, 14:16] += outlier_carrier
-
-    train_ds = TensorDataset(x[:n_train], labels[:n_train])
-    test_ds = TensorDataset(x[n_train:], labels[n_train:])
-    return train_ds, test_ds
+    n = n_train + n_test
+    y = torch.randint(0, 4, (n,), generator=g)
+    x = torch.randn(n, L, 8, generator=g) * 0.1
+    x[torch.arange(n), :8, y] += 2.0
+    return (TensorDataset(x[:n_train], y[:n_train]),
+            TensorDataset(x[n_train:], y[n_train:]), 8, 4)
 
 
-def evaluate_model(model: nn.Module, loader: DataLoader, device: torch.device) -> Tuple[float, torch.Tensor]:
+TASKS = {
+    "ecg5000": dict(load=load_ecg5000, epochs=40, batch=32, seeds=5),
+    "cue256": dict(load=lambda: make_delayed_cue(256), epochs=20, batch=64, seeds=5),
+    "cue1024": dict(load=lambda: make_delayed_cue(1024, 2000, 500), epochs=20, batch=64, seeds=3),
+}
+
+BASE = dict(d_model=64, n_heads=4, d_state=16, act_bits=8)
+CONFIGS = {
+    "A0_fp32":            dict(weight_mode="fp32", use_fwht=False),
+    "A1_w8a8":            dict(weight_mode="int8", use_fwht=False),
+    "A2_tern_nofwht":     dict(weight_mode="ternary", use_fwht=False),
+    "A3_tern_hbitlinear": dict(weight_mode="ternary", use_fwht=True),
+    "A4_hwscan_fixed16":  dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="fixed16"),
+    "A5_hwscan_pot":      dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="pot"),
+    "A6_hwscan_pot0":     dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="pot0"),
+    "A7_hwscan_cpot":     dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="cpot"),
+    "A8_hwscan_cpot2":    dict(weight_mode="ternary", use_fwht=True, hw_scan=True, abar_mode="cpot2"),
+}
+# integer (bit-exact RTL) re-evaluation of the trained model
+INT_EVAL = {
+    "A4_hwscan_fixed16": {"int_mult_q15_s32": MULT_Q15},
+    "A7_hwscan_cpot": {"int_cpot_s32_g10_round": PROPOSED_32, "int_cpot_s16_g0_trunc": LEGACY_16},
+}
+
+
+# ------------------------------------------------------------------------------
+# train / eval
+# ------------------------------------------------------------------------------
+
+@torch.no_grad()
+def evaluate(model, loader, dev, n_cls):
     model.eval()
-    correct = 0
-    total = 0
-    logits_list = []
-    with torch.no_grad():
-        for bx, by in loader:
-            bx, by = bx.to(device), by.to(device)
-            out = model(bx)
-            preds = out.argmax(dim=-1)
-            correct += (preds == by).sum().item()
-            total += by.numel()
-            logits_list.append(out.cpu())
-    return 100.0 * correct / max(total, 1), torch.cat(logits_list, dim=0)
+    preds, ys = [], []
+    for bx, by in loader:
+        preds.append(model(bx.to(dev)).argmax(-1).cpu())
+        ys.append(by)
+    p, y = torch.cat(preds), torch.cat(ys)
+    acc = float((p == y).float().mean()) * 100
+    recalls = [float((p[y == c] == c).float().mean()) for c in range(n_cls) if (y == c).any()]
+    return acc, float(np.mean(recalls)) * 100
 
 
-def compute_sqnr(ref: torch.Tensor, target: torch.Tensor) -> float:
-    sig = torch.mean(ref ** 2).item()
-    err = torch.mean((ref - target) ** 2).item()
-    if err < 1e-12:
-        return 99.9
-    return float(10.0 * np.log10(max(sig, 1e-12) / err))
-
-
-def train_single_config(
-    cfg: BitMamba2Config,
-    train_ds: TensorDataset,
-    test_ds: TensorDataset,
-    seed: int,
-    epochs: int = 18,
-    lr: float = 3e-3,
-) -> Tuple[BitMamba2SequenceModel, float, torch.Tensor]:
-    device = torch.device("cpu")
+def train_one(cfg, train_ds, test_ds, in_dim, n_cls, seed, epochs, batch, dev):
     torch.manual_seed(seed)
     np.random.seed(seed)
-
-    model = BitMamba2SequenceModel(
-        input_dim=16, num_classes=4, cfg=cfg, n_layers=2, pool="last"
-    ).to(device)
-
-    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True)
-    test_loader = DataLoader(test_ds, batch_size=128, shuffle=False)
-
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
-    criterion = nn.CrossEntropyLoss()
-
+    model = BitMamba2SequenceModel(in_dim, n_cls, cfg).to(dev)
+    tl = DataLoader(train_ds, batch_size=batch, shuffle=True,
+                    generator=torch.Generator().manual_seed(seed))
+    opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=2e-3, total_steps=epochs * len(tl))
+    lossf = nn.CrossEntropyLoss()
     for _ in range(epochs):
         model.train()
-        for bx, by in train_loader:
-            bx, by = bx.to(device), by.to(device)
-            optimizer.zero_grad()
-            logits = model(bx)
-            loss = criterion(logits, by)
+        for bx, by in tl:
+            opt.zero_grad(set_to_none=True)
+            loss = lossf(model(bx.to(dev)), by.to(dev))
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-        scheduler.step()
-
-    acc, test_logits = evaluate_model(model, test_loader, device)
-    return model, acc, test_logits
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            opt.step()
+            sched.step()
+    return model
 
 
-def export_quartus_mif_files(model: BitMamba2SequenceModel, out_dir: str) -> Dict[str, int]:
-    """
-    Exports Radix-3 packed ternary weights (.mif format for Intel Quartus M10K BRAM)
-    from the first BitMamba2Block's in_proj and out_proj layers.
-    """
-    os.makedirs(out_dir, exist_ok=True)
-    block0 = model.layers[0]
-    w_in, gamma_in = block0.in_proj.get_ternary_weights()
-    packed_in = pack_radix3_weights(w_in.cpu().numpy())
-
-    mif_path = os.path.join(out_dir, "bitmamba_in_proj_radix3.mif")
-    flat_bytes = packed_in.flatten()
-    depth = len(flat_bytes)
-    with open(mif_path, "w") as f:
-        f.write(f"-- Intel Quartus Memory Initialization File (.mif) for Cyclone V M10K\n")
-        f.write(f"-- Layer: BitMamba2Block[0].in_proj (Radix-3: 5 trits per 8-bit byte, scale={gamma_in:.6f})\n")
-        f.write(f"WIDTH=8;\nDEPTH={depth};\nADDRESS_RADIX=HEX;\nDATA_RADIX=HEX;\nCONTENT BEGIN\n")
-        for addr, val in enumerate(flat_bytes):
-            f.write(f"  {addr:04X} : {int(val):02X};\n")
-        f.write("END;\n")
-
-    return {"in_proj_radix3_bytes": int(depth), "in_proj_total_trits": int(w_in.numel())}
-
-
-def run_ablation_suite():
-    torch.set_num_threads(2)
-    train_ds, test_ds = generate_sequential_biosignal_dataset(seed=42)
-    seeds = [42, 100, 2026]
-
-    ablation_specs = [
-        ("A0_FP32_Exact", BitMamba2Config(d_model=32, d_state=8, weight_mode="fp32", use_fwht=False, abar_mode="exact", silu_mode="exact")),
-        ("A1_INT8_DSP_Baseline", BitMamba2Config(d_model=32, d_state=8, weight_mode="int8", use_fwht=False, abar_mode="fixed16", silu_mode="exact")),
-        ("A2_INT4_Baseline", BitMamba2Config(d_model=32, d_state=8, weight_mode="int4", use_fwht=False, abar_mode="fixed16", silu_mode="exact")),
-        ("A3_Ternary_NoFWHT", BitMamba2Config(d_model=32, d_state=8, weight_mode="ternary", use_fwht=False, abar_mode="fixed16", silu_mode="exact", act_bits=4)),
-        ("A4_Ternary_HBitLinear_2bit", BitMamba2Config(d_model=32, d_state=8, weight_mode="ternary", use_fwht=True, abar_mode="fixed16", silu_mode="exact", act_bits=4)),
-        ("A5_Ternary_HBitLinear_Radix3", BitMamba2Config(d_model=32, d_state=8, weight_mode="ternary", use_fwht=True, abar_mode="fixed16", silu_mode="exact", act_bits=4)),
-        ("A6_Ternary_StdPoT_PWL", BitMamba2Config(d_model=32, d_state=8, weight_mode="ternary", use_fwht=True, abar_mode="pot", silu_mode="pwl16", act_bits=4)),
-        ("A7_Proposed_BitMamba_CPoT", BitMamba2Config(d_model=32, d_state=8, weight_mode="ternary", use_fwht=True, abar_mode="cpot", silu_mode="pwl16", act_bits=4)),
-    ]
-
-    summary_results = {}
-    ref_logits_per_seed = {}
-    best_a7_model = None
-
-    print("=== Starting 8-Config QAT Ablation Study across 3 Random Seeds ===", flush=True)
-    for name, cfg in ablation_specs:
+def run_task(task, seeds, dev):
+    spec = TASKS[task]
+    train_ds, test_ds, in_dim, n_cls = spec["load"]()
+    test_l = DataLoader(test_ds, batch_size=256)
+    out = {"task": task, "seq_len": int(train_ds[0][0].shape[0]), "n_train": len(train_ds),
+           "n_test": len(test_ds), "n_classes": n_cls, "epochs": spec["epochs"],
+           "seeds": seeds, "model": BASE, "configs": {}}
+    print(f"=== {task}: L={out['seq_len']} train={len(train_ds)} test={len(test_ds)} ===", flush=True)
+    for name, over in CONFIGS.items():
+        cfg = BitMamba2Config(**BASE, **over)
+        rec = {"cfg": over, "acc": [], "bal_acc": [], "zero_frac": [], "int_eval": {}}
         t0 = time.time()
-        accs = []
-        sqnrs = []
-        sparsities = []
-        mem_info = None
-
         for s in seeds:
-            model, acc, logits = train_single_config(cfg, train_ds, test_ds, seed=s, epochs=10)
-            accs.append(acc)
-            info = model.model_summary()
-            mem_info = info
-            sparsities.append(info["avg_ternary_zero_sparsity"] * 100.0)
-
-            if name == "A0_FP32_Exact":
-                ref_logits_per_seed[s] = logits
-                sqnrs.append(99.9)
-            else:
-                sqnrs.append(compute_sqnr(ref_logits_per_seed[s], logits))
-
-            if name == "A7_Proposed_BitMamba_CPoT" and s == seeds[0]:
-                best_a7_model = model
-
-        elapsed = time.time() - t0
-        summary_results[name] = {
-            "acc_mean": float(np.mean(accs)),
-            "acc_std": float(np.std(accs)),
-            "sqnr_mean_db": float(np.mean(sqnrs)),
-            "sqnr_std_db": float(np.std(sqnrs)),
-            "zero_sparsity_pct": float(np.mean(sparsities)),
-            "model_summary": mem_info,
-            "elapsed_sec": elapsed,
-        }
-        print(
-            f"  [{name:28s}] Acc: {np.mean(accs):6.2f}% +- {np.std(accs):4.2f}% | "
-            f"SQNR: {np.mean(sqnrs):5.2f} dB | Sparsity(W==0): {np.mean(sparsities):5.1f}% ({elapsed:.1f}s)"
-        )
-
-    out_dir = os.path.join(os.path.dirname(__file__), "results")
-    os.makedirs(out_dir, exist_ok=True)
-    if best_a7_model is not None:
-        mif_stats = export_quartus_mif_files(best_a7_model, os.path.join(out_dir, "quartus_mif"))
-        summary_results["exported_mif_stats"] = mif_stats
-
-    out_json = os.path.join(out_dir, "ablation_qat_results.json")
-    with open(out_json, "w") as f:
-        json.dump(summary_results, f, indent=2)
-    print(f"[OK] Saved ablation results to {out_json}")
+            model = train_one(cfg, train_ds, test_ds, in_dim, n_cls, s, spec["epochs"], spec["batch"], dev)
+            acc, bacc = evaluate(model, test_l, dev, n_cls)
+            rec["acc"].append(acc)
+            rec["bal_acc"].append(bacc)
+            summ = model.summary()
+            rec["zero_frac"].append(summ["ternary_zero_fraction"])
+            rec["summary"] = summ
+            for iname, scfg in INT_EVAL.get(name, {}).items():
+                model.set_int_emulation(scfg)
+                iacc, ibacc = evaluate(model, test_l, dev, n_cls)
+                sat = sum(getattr(l, "last_sat_events", 0) for l in model.layers)
+                model.set_int_emulation(None)
+                r = rec["int_eval"].setdefault(iname, {"acc": [], "bal_acc": [], "sat_events_last_batch": []})
+                r["acc"].append(iacc)
+                r["bal_acc"].append(ibacc)
+                r["sat_events_last_batch"].append(sat)
+        rec["acc_mean"], rec["acc_std"] = float(np.mean(rec["acc"])), float(np.std(rec["acc"]))
+        rec["bal_acc_mean"], rec["bal_acc_std"] = float(np.mean(rec["bal_acc"])), float(np.std(rec["bal_acc"]))
+        for r in rec["int_eval"].values():
+            r["acc_mean"], r["acc_std"] = float(np.mean(r["acc"])), float(np.std(r["acc"]))
+        rec["elapsed_s"] = time.time() - t0
+        out["configs"][name] = rec
+        ints = " ".join(f"{k}={v['acc_mean']:.2f}" for k, v in rec["int_eval"].items())
+        print(f"  {name:20s} acc {rec['acc_mean']:6.2f} +- {rec['acc_std']:4.2f} | "
+              f"bal {rec['bal_acc_mean']:6.2f} | zeros {np.mean(rec['zero_frac'])*100:4.1f}% "
+              f"| {ints} ({rec['elapsed_s']:.0f}s)", flush=True)
+    os.makedirs(os.path.join(HERE, "results"), exist_ok=True)
+    with open(os.path.join(HERE, "results", f"ablation_{task}.json"), "w") as f:
+        json.dump(out, f, indent=2)
 
 
 if __name__ == "__main__":
-    run_ablation_suite()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--tasks", nargs="+", default=list(TASKS))
+    ap.add_argument("--seeds", type=int, default=None, help="override per-task seed count")
+    ap.add_argument("--configs", nargs="+", default=None)
+    a = ap.parse_args()
+    if a.configs:
+        CONFIGS = {k: v for k, v in CONFIGS.items() if k in a.configs}
+    dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    for t in a.tasks:
+        run_task(t, [42, 100, 2026, 7, 31][: a.seeds or TASKS[t]["seeds"]], dev)

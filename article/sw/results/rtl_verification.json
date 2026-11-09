@@ -1,0 +1,86 @@
+{
+  "simulator": "Icarus Verilog 12.0",
+  "tests": [
+    {
+      "test": "radix3_exhaustive",
+      "checked": 256,
+      "mismatches": 0
+    },
+    {
+      "test": "fwht16_random",
+      "checked": 2000,
+      "mismatches": 0
+    },
+    {
+      "test": "engine_P16_K64_M40_ENC0",
+      "checked": 160,
+      "mismatches": 0,
+      "cycles_per_matvec": 167
+    },
+    {
+      "test": "engine_P32_K128_M25_ENC0",
+      "checked": 100,
+      "mismatches": 0,
+      "cycles_per_matvec": 108
+    },
+    {
+      "test": "engine_P64_K256_M17_ENC0",
+      "checked": 68,
+      "mismatches": 0,
+      "cycles_per_matvec": 77
+    },
+    {
+      "test": "engine_P16_K64_M40_ENC1",
+      "checked": 160,
+      "mismatches": 0,
+      "cycles_per_matvec": 167
+    },
+    {
+      "test": "engine_P32_K128_M25_ENC1",
+      "checked": 100,
+      "mismatches": 0,
+      "cycles_per_matvec": 108
+    },
+    {
+      "test": "engine_P64_K256_M17_ENC1",
+      "checked": 68,
+      "mismatches": 0,
+      "cycles_per_matvec": 77
+    },
+    {
+      "test": "engine_P16_K64_M40_ENC2",
+      "checked": 160,
+      "mismatches": 0,
+      "cycles_per_matvec": 167
+    },
+    {
+      "test": "engine_P32_K128_M25_ENC2",
+      "checked": 100,
+      "mismatches": 0,
+      "cycles_per_matvec": 108
+    },
+    {
+      "test": "engine_P64_K256_M17_ENC2",
+      "checked": 68,
+      "mismatches": 0,
+      "cycles_per_matvec": 77
+    },
+    {
+      "test": "scan_cpot_s32_g10_round",
+      "checked": 2048,
+      "mismatches": 0
+    },
+    {
+      "test": "scan_cpot_s16_g0_trunc",
+      "checked": 2048,
+      "mismatches": 0
+    },
+    {
+      "test": "scan_mult_q15_s32_g10",
+      "checked": 2048,
+      "mismatches": 0
+    }
+  ],
+  "total_checked": 9384,
+  "total_mismatches": 0
+}

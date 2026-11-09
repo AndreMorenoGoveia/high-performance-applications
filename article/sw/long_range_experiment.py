@@ -1,162 +1,154 @@
 """
-Experiment 1 (Addressing Review Point 3 & Point 4):
-1. Long-Range Recurrent Memory Retention & State SQNR vs. Sequence Length L (L = 64 to 16,384):
-   Compares Exact FP32, Fixed16 (DSP), Standard PoT (2^-k, LightMamba/FastMamba),
-   Proposed CPoT ({2^-k, 1 - 2^-k}), and Dual-Shift CPoT2.
-2. On-Chip Memory Scaling O(1) vs O(L) on Intel Cyclone V (M10K BRAM limit):
-   Compares Ternary Transformer (TeLLMe/TerEffic KV-Cache) vs. BitMamba-CV O(1) State.
+Long-memory numerics of the scan (no training involved).
+
+E1. Quantisation error of Abar in the long-memory band [0.90, 0.999]: absolute error and
+    relative error of the time constant tau = -1/ln(Abar) for each scheme.
+E2. Float readout fidelity vs. sequence length (L = 64..16384): Abar quantised, all
+    else exact; SQNR of y_L and cosine similarity of the slow heads.
+E3. Integer state (golden model = RTL): impulse response of h under 1-2^-k for the
+    legacy 16-bit/no-guard/truncating state vs. the corrected 32-bit/10-guard/rounded one.
+E4. Integer state with random INT8 inputs: SQNR of y_t (integer RTL arithmetic) against
+    the float recurrence with the *same* quantised codes -> pure datapath error.
+Writes results/long_range_results.json
 """
 
 from __future__ import annotations
 import json
 import os
-from typing import Dict, List
 import numpy as np
 import torch
 
-from models.mamba2_ssd_qat import quantize_abar
+from models.mamba2_ssd_qat import quant_abar
+from models.golden_model_bitexact import (
+    LEGACY_16, PROPOSED_32, MULT_Q15, scan_lane_run, encode_cpot, decode_cpot, _shr)
+
+MODES = ["fixed16", "pot", "pot0", "cpot", "cpot2"]
 
 
-def compute_sqnr_db(ref: torch.Tensor, approx: torch.Tensor) -> float:
-    noise = ref - approx
-    sig_pow = torch.mean(ref ** 2).item()
-    noise_pow = torch.mean(noise ** 2).item()
-    if noise_pow < 1e-15:
-        return 100.0
-    return float(10.0 * np.log10(max(sig_pow, 1e-12) / noise_pow))
+def sqnr_db(ref, approx):
+    ref, approx = np.asarray(ref, float), np.asarray(approx, float)
+    noise = np.mean((ref - approx) ** 2)
+    return float(10 * np.log10(np.mean(ref ** 2) / noise)) if noise > 0 else float("inf")
 
 
-@torch.no_grad()
-def run_long_range_ssm_experiment(
-    seq_lengths: List[int] = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384],
-    n_heads: int = 8,
-    head_dim: int = 16,
-    d_state: int = 16,
-    seeds: List[int] = [42, 100, 2026],
-) -> Dict:
-    """
-    Evaluates recurrent state drift (SQNR in dB) and long-horizon impulse recall
-    across sequence lengths up to L = 16,384 on CUDA GPU.
-    """
-    device = torch.device("cpu")
-    modes = ["fixed16", "pot", "cpot", "cpot2"]
-    results = {m: {"sqnr_mean": [], "sqnr_std": [], "recall_mean": [], "recall_std": []} for m in modes}
-    results["seq_lengths"] = seq_lengths
-
-    # Also measure quantization error curve directly over the long-memory regime A_bar in [0.50, 0.999]
-    a_grid = torch.linspace(0.50, 0.999, 500, device=device)
-    grid_errors = {}
-    for m in modes:
-        q_grid = quantize_abar(a_grid, mode=m)
-        grid_errors[m] = {
-            "max_abs_err_long_mem": float(torch.max(torch.abs(a_grid[a_grid >= 0.90] - q_grid[a_grid >= 0.90])).item()),
-            "rmse_long_mem": float(torch.sqrt(torch.mean((a_grid[a_grid >= 0.90] - q_grid[a_grid >= 0.90]) ** 2)).item()),
-            "sqnr_long_mem_db": compute_sqnr_db(a_grid[a_grid >= 0.90], q_grid[a_grid >= 0.90]),
+def e1_grid():
+    a = torch.linspace(0.90, 0.999, 2000, dtype=torch.float64)
+    tau = -1 / torch.log(a)
+    out = {}
+    for m in MODES:
+        q = quant_abar(a, m)
+        tau_q = torch.where(q >= 1, torch.tensor(float("inf"), dtype=torch.float64), -1 / torch.log(q))
+        rel = ((tau_q - tau).abs() / tau)
+        out[m] = {
+            "max_abs_err": float((q - a).abs().max()),
+            "rmse": float(torch.sqrt(((q - a) ** 2).mean())),
+            "tau_rel_err_median": float(rel.median()),
+            "tau_rel_err_max": float(rel.max()),
+            "distinct_levels": int(torch.unique(q).numel()),
         }
-    results["long_memory_eigenvalue_metrics"] = grid_errors
+    return out
 
+
+def e2_readout(seq_lengths=(64, 256, 1024, 4096, 16384), H=8, P=16, N=16, seeds=(42, 100, 2026, 7, 31)):
+    res = {m: {"sqnr_mean": [], "sqnr_std": [], "cos_slow_mean": []} for m in MODES}
     for L in seq_lengths:
-        sqnr_per_mode = {m: [] for m in modes}
-        recall_per_mode = {m: [] for m in modes}
+        acc = {m: ([], []) for m in MODES}
+        for s in seeds:
+            g = torch.Generator().manual_seed(s)
+            tau = torch.exp(torch.linspace(np.log(16.0), np.log(float(L)), H, dtype=torch.float64))
+            abar = torch.exp(-1 / tau).view(1, H) ** torch.empty(L, H, dtype=torch.float64).uniform_(0.8, 1.2, generator=g)
+            x = torch.randn(L, H, P, generator=g, dtype=torch.float64) * 0.15
+            b = torch.randn(L, H, N, generator=g, dtype=torch.float64) * 0.15
+            x[0] *= 13.0
+            b[0] *= 13.0
+            c = b[0] / b[0].norm(dim=-1, keepdim=True)
 
-        for seed in seeds:
-            torch.manual_seed(seed)
-            # Long-memory HiPPO/Mamba-2 schedule where true A_bar spans [0.92, 1 - 1/L]
-            target_half_lives = torch.exp(
-                torch.linspace(np.log(16.0), np.log(float(L)), n_heads, device=device)
-            )
-            abar_base = torch.exp(-1.0 / target_half_lives).view(1, 1, n_heads)  # (1, 1, H) in [0.939, 0.9999]
+            def final_y(a):
+                w = torch.exp(torch.flip(torch.cumsum(torch.flip(torch.log(a), [0]), 0), [0]))
+                w = torch.cat([w[1:], torch.ones(1, H, dtype=torch.float64)])
+                h = torch.einsum("lh,lhp,lhn->hpn", w, x, b)
+                return torch.einsum("hpn,hn->hp", h, c)
 
-            # Dynamic input modulation around long-memory regime
-            dt_jitter = torch.empty(1, L, n_heads, device=device).uniform_(0.8, 1.2)
-            abar_exact = torch.pow(abar_base, dt_jitter).clamp(0.55, 0.9995)
+            y = final_y(abar)
+            for m in MODES:
+                yq = final_y(quant_abar(abar, m).clamp(min=1e-300))
+                acc[m][0].append(sqnr_db(y.numpy(), yq.numpy()))
+                acc[m][1].append(float(torch.nn.functional.cosine_similarity(y[-2:].flatten(), yq[-2:].flatten(), dim=0)))
+        for m in MODES:
+            res[m]["sqnr_mean"].append(float(np.mean(acc[m][0])))
+            res[m]["sqnr_std"].append(float(np.std(acc[m][0])))
+            res[m]["cos_slow_mean"].append(float(np.mean(acc[m][1])))
+    res["seq_lengths"] = list(seq_lengths)
+    return res
 
-            # Input sequence with embedded key signal at t = 0 to test long-range memory retention at t = L-1
-            x_seq = torch.randn(1, L, n_heads, head_dim, device=device) * 0.15
-            b_seq = torch.randn(1, L, n_heads, d_state, device=device) * 0.15
-            c_query = torch.randn(1, n_heads, d_state, device=device)
 
-            # Inject strong trigger token at t=0
-            trigger_signal = torch.randn(1, n_heads, head_dim, device=device)
-            trigger_b = torch.randn(1, n_heads, d_state, device=device)
-            x_seq[:, 0] = trigger_signal * 2.0
-            b_seq[:, 0] = trigger_b * 2.0
-            c_query = trigger_b / (torch.norm(trigger_b, dim=-1, keepdim=True) + 1e-6)
+def e3_impulse(ks=(4, 6, 8, 10, 12), bx=64 * 64):
+    out = {}
+    for name, cfg in (("legacy_s16_g0_trunc", LEGACY_16), ("proposed_s32_g10_round", PROPOSED_32)):
+        rows = {}
+        for k in ks:
+            tau = 2 ** k
+            h = np.array([bx << cfg.guard], dtype=np.int64)
+            traj = [h[0]]
+            for _ in range(4 * tau):
+                h = np.clip(h - _shr(h, k, cfg.round_shift), -(1 << (cfg.state_w - 1)), (1 << (cfg.state_w - 1)) - 1)
+                traj.append(h[0])
+            traj = np.array(traj, float) / (1 << cfg.guard)
+            ideal = bx * (1 - 2.0 ** -k) ** np.arange(len(traj))
+            rows[str(k)] = {
+                "tau_steps": tau,
+                "h_over_ideal_at_1tau": float(traj[tau] / ideal[tau]),
+                "h_over_ideal_at_4tau": float(traj[4 * tau] / ideal[4 * tau]),
+                "final_h": float(traj[-1]), "final_ideal": float(ideal[-1]),
+            }
+        out[name] = rows
+    return out
 
-            # Compute exact recurrent trajectory using associative log-space cumulative products
-            # h_T = sum_{t=0}^{L-1} (prod_{s=t+1}^{L-1} abar_s) * u_t
-            u_seq = x_seq.unsqueeze(-1) * b_seq.unsqueeze(-2)  # (1, L, H, P, N)
 
-            def compute_final_state(abar_tensor: torch.Tensor) -> torch.Tensor:
-                log_a = torch.log(abar_tensor.clamp(min=1e-12))  # (1, L, H)
-                rev_cumsum = torch.flip(torch.cumsum(torch.flip(log_a, dims=[1]), dim=1), dims=[1])
-                # Shift by 1 so step t gets product from t+1 to L-1; t=L-1 gets weight 1.0
-                log_weights = torch.cat([rev_cumsum[:, 1:, :], torch.zeros(1, 1, n_heads, device=device)], dim=1)
-                weights = torch.exp(log_weights).unsqueeze(-1).unsqueeze(-1)  # (1, L, H, 1, 1)
-                h_final = torch.sum(weights * u_seq, dim=1)  # (1, H, P, N)
-                return h_final
-
-            h_exact = compute_final_state(abar_exact)
-            y_exact = torch.einsum("bhpn,bhn->bhp", h_exact, c_query)
-
-            # Contribution from t=0 trigger alone in exact model
-            prod_all_exact = torch.exp(torch.sum(torch.log(abar_exact[:, 1:, :]), dim=1))  # (1, H)
-
-            for m in modes:
-                abar_q = quantize_abar(abar_exact, mode=m, max_shift=14)
-                h_q = compute_final_state(abar_q)
-                y_q = torch.einsum("bhpn,bhn->bhp", h_q, c_query)
-
-                sqnr_val = compute_sqnr_db(y_exact, y_q)
-                sqnr_per_mode[m].append(sqnr_val)
-
-                # Cosine similarity of long-memory head readout (slowest-decaying heads)
-                cos_sim = torch.nn.functional.cosine_similarity(
-                    y_exact[:, -2:, :].flatten(), y_q[:, -2:, :].flatten(), dim=0
-                ).item()
-                recall_per_mode[m].append(max(0.0, cos_sim) * 100.0)
-
-        for m in modes:
-            results[m]["sqnr_mean"].append(float(np.mean(sqnr_per_mode[m])))
-            results[m]["sqnr_std"].append(float(np.std(sqnr_per_mode[m])))
-            results[m]["recall_mean"].append(float(np.mean(recall_per_mode[m])))
-            results[m]["recall_std"].append(float(np.std(recall_per_mode[m])))
-
-    # O(1) vs O(L) On-Chip State Memory Footprint (in KB) for d_inner=128, n_layers=4, d_state=16
-    # Transformer KV-Cache (INT8 K and V): 2 * n_layers * d_inner * L bytes
-    # BitMamba-CV State (INT16 Q8.8 h_t + 4-tap Conv1D buffer): n_layers * (d_inner * d_state * 2 + d_inner * 4) bytes
-    n_layers = 4
-    d_inner = 128
-    kv_cache_kb = [float(2 * n_layers * d_inner * L) / 1024.0 for L in seq_lengths]
-    mamba_state_kb = [
-        float(n_layers * (d_inner * d_state * 2 + d_inner * 4)) / 1024.0 for _ in seq_lengths
-    ]
-    results["memory_scaling_kb"] = {
-        "cyclone5_m10k_capacity_kb": 553.0,  # DE10-Nano 5CSEBA6U23I7: 5,530 Kbits = 691.25 KB (~553 KB usable)
-        "transformer_kv_int8_kb": kv_cache_kb,
-        "bitmamba_cv_o1_state_kb": mamba_state_kb,
-    }
-    return results
+def e4_random(T=4096, N=16, seeds=(42, 100, 2026), k_range=(4, 12)):
+    out = {}
+    for name, cfg in (("legacy_s16_g0_trunc", LEGACY_16), ("proposed_s32_g10_round", PROPOSED_32),
+                      ("mult_q15_s32_g10", MULT_Q15)):
+        vals = []
+        for s in seeds:
+            rng = np.random.default_rng(s)
+            k = rng.integers(k_range[0], k_range[1] + 1, size=T)
+            m = np.ones(T, np.int64)
+            a = decode_cpot(m, k)
+            j = np.clip(k - 1, 0, 15)                      # Delta ~ 2 * (1 - Abar)  -> bounded state
+            x = rng.integers(-64, 64, size=T)
+            b = rng.integers(-64, 64, size=(T, N))
+            c = rng.integers(-64, 64, size=(T, N))
+            a_q15 = np.round(a * 32768).clip(0, 32767).astype(np.int64)
+            y_int = scan_lane_run(x, b, c, m, k, j, a_q15, cfg)
+            h = np.zeros(N)
+            a_used = a if cfg.decay == "cpot" else a_q15 / 32768
+            y_ref = []
+            for t in range(T):
+                h = a_used[t] * h + 2.0 ** -j[t] * x[t] * b[t]
+                y_ref.append(h @ c[t])
+            vals.append(sqnr_db(y_ref, y_int))
+        out[name] = {"sqnr_mean_db": float(np.mean(vals)), "sqnr_std_db": float(np.std(vals)),
+                     "k_range": list(k_range), "T": T}
+    return out
 
 
 if __name__ == "__main__":
-    out_dir = os.path.join(os.path.dirname(__file__), "results")
-    os.makedirs(out_dir, exist_ok=True)
-    res = run_long_range_ssm_experiment()
-    out_path = os.path.join(out_dir, "long_range_cpot_results.json")
-    with open(out_path, "w") as f:
+    res = {"E1_grid_0.90_0.999": e1_grid(), "E2_readout_vs_L": e2_readout(),
+           "E3_integer_impulse": e3_impulse(), "E4_integer_random_sqnr": e4_random()}
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "long_range_results.json")
+    with open(out, "w") as f:
         json.dump(res, f, indent=2)
-
-    print("=== Long-Memory Eigenvalue Quantization Error (A_bar in [0.90, 0.999]) ===")
-    for m, stats in res["long_memory_eigenvalue_metrics"].items():
-        print(
-            f"  Mode {m:8s} | RMSE: {stats['rmse_long_mem']:.5f} | "
-            f"MaxErr: {stats['max_abs_err_long_mem']:.5f} | SQNR: {stats['sqnr_long_mem_db']:.2f} dB"
-        )
-    print("\n=== Sequence Length Scaling (L = 64 -> 16,384) Final Readout SQNR (dB) ===")
-    for idx, L in enumerate(res["seq_lengths"]):
-        print(
-            f"  L={L:5d} | PoT: {res['pot']['sqnr_mean'][idx]:6.2f} dB (Recall {res['pot']['recall_mean'][idx]:5.1f}%) | "
-            f"CPoT: {res['cpot']['sqnr_mean'][idx]:6.2f} dB (Recall {res['cpot']['recall_mean'][idx]:5.1f}%) | "
-            f"CPoT2: {res['cpot2']['sqnr_mean'][idx]:6.2f} dB | Fixed16: {res['fixed16']['sqnr_mean'][idx]:6.2f} dB"
-        )
+    print("E1 (Abar in [0.90,0.999])")
+    for m, r in res["E1_grid_0.90_0.999"].items():
+        print(f"  {m:8s} max|err|={r['max_abs_err']:.5f} rmse={r['rmse']:.5f} "
+              f"tau rel err median={r['tau_rel_err_median']:.3f} max={r['tau_rel_err_max']:.3f} levels={r['distinct_levels']}")
+    e2 = res["E2_readout_vs_L"]
+    print("E2 readout SQNR (dB) for L =", e2["seq_lengths"])
+    for m in MODES:
+        print(f"  {m:8s}", [round(v, 1) for v in e2[m]["sqnr_mean"]], "cos", [round(v, 3) for v in e2[m]["cos_slow_mean"]])
+    print("E3 impulse h/ideal at 1 tau and 4 tau")
+    for n, rows in res["E3_integer_impulse"].items():
+        print(f"  {n:24s}", {k: (round(r['h_over_ideal_at_1tau'], 3), round(r['h_over_ideal_at_4tau'], 3)) for k, r in rows.items()})
+    print("E4 integer datapath SQNR (dB):", {k: round(v["sqnr_mean_db"], 1) for k, v in res["E4_integer_random_sqnr"].items()})
+    print("[OK] ->", out)

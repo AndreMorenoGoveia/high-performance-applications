@@ -1,46 +1,260 @@
-// =============================================================================
-// Module: radix3_decoder.v
-// Target: Intel Cyclone V (28nm, 6-input Fracturable ALMs)
-// Description:
-//   Decodes 1 packed Radix-3 byte (8 bits, values 0..242 = 3^5 - 1) into
-//   5 parallel ternary weights w_0..w_4 in {-1, 0, +1}, represented as:
-//     w_nz[i]  : 1 if weight != 0, 0 if weight == 0
-//     w_neg[i] : 1 if weight == -1, 0 if weight == +1 (or 0)
-//   Since 8-bit input -> 10 single-bit outputs is a pure combinational truth
-//   table, Intel Quartus maps each output bit onto at most 4 fracturable ALMs
-//   (1 level of 6-LUT + 2:1 mux), completing in < 1.2 ns (single cycle).
-// =============================================================================
-
+// Radix-3 decoder: 1 byte (0..242) -> 5 trits {-1,0,+1}, purely combinational.
+// byte = sum_i (w_i + 1) * 3^i. Written as a 243-entry truth table so it maps to plain
+// 6-input LUTs (no carry chains). Table generated from the golden model RADIX3_LUT
+// (sw/models/golden_model_bitexact.py); codes 243..255 decode to 0.
+// Trit encoding (2 bits): bit0 = nonzero, bit1 = negative  (00=0, 01=+1, 11=-1).
 `timescale 1ns / 1ps
 
 module radix3_decoder (
     input  wire [7:0] packed_byte,
-    output reg  [4:0] w_nz,
-    output reg  [4:0] w_neg
+    output reg  [9:0] trits        // trit i in bits [2i+1:2i]
 );
-
-    integer b, rem, d0, d1, d2, d3, d4;
-
     always @(*) begin
-        if (packed_byte < 8'd243) begin
-            rem = packed_byte;
-            d0  = rem % 3; rem = rem / 3;
-            d1  = rem % 3; rem = rem / 3;
-            d2  = rem % 3; rem = rem / 3;
-            d3  = rem % 3; rem = rem / 3;
-            d4  = rem % 3;
-
-            // Digit encoding: 0 -> -1 (nz=1, neg=1), 1 -> 0 (nz=0, neg=0), 2 -> +1 (nz=1, neg=0)
-            w_nz[0]  = (d0 != 1); w_neg[0] = (d0 == 0);
-            w_nz[1]  = (d1 != 1); w_neg[1] = (d1 == 0);
-            w_nz[2]  = (d2 != 1); w_neg[2] = (d2 == 0);
-            w_nz[3]  = (d3 != 1); w_neg[3] = (d3 == 0);
-            w_nz[4]  = (d4 != 1); w_neg[4] = (d4 == 0);
-        end else begin
-            w_nz  = 5'b00000;
-            w_neg = 5'b00000;
-        end
+        case (packed_byte)
+            8'd0: trits = 10'h3ff;
+            8'd1: trits = 10'h3fc;
+            8'd2: trits = 10'h3fd;
+            8'd3: trits = 10'h3f3;
+            8'd4: trits = 10'h3f0;
+            8'd5: trits = 10'h3f1;
+            8'd6: trits = 10'h3f7;
+            8'd7: trits = 10'h3f4;
+            8'd8: trits = 10'h3f5;
+            8'd9: trits = 10'h3cf;
+            8'd10: trits = 10'h3cc;
+            8'd11: trits = 10'h3cd;
+            8'd12: trits = 10'h3c3;
+            8'd13: trits = 10'h3c0;
+            8'd14: trits = 10'h3c1;
+            8'd15: trits = 10'h3c7;
+            8'd16: trits = 10'h3c4;
+            8'd17: trits = 10'h3c5;
+            8'd18: trits = 10'h3df;
+            8'd19: trits = 10'h3dc;
+            8'd20: trits = 10'h3dd;
+            8'd21: trits = 10'h3d3;
+            8'd22: trits = 10'h3d0;
+            8'd23: trits = 10'h3d1;
+            8'd24: trits = 10'h3d7;
+            8'd25: trits = 10'h3d4;
+            8'd26: trits = 10'h3d5;
+            8'd27: trits = 10'h33f;
+            8'd28: trits = 10'h33c;
+            8'd29: trits = 10'h33d;
+            8'd30: trits = 10'h333;
+            8'd31: trits = 10'h330;
+            8'd32: trits = 10'h331;
+            8'd33: trits = 10'h337;
+            8'd34: trits = 10'h334;
+            8'd35: trits = 10'h335;
+            8'd36: trits = 10'h30f;
+            8'd37: trits = 10'h30c;
+            8'd38: trits = 10'h30d;
+            8'd39: trits = 10'h303;
+            8'd40: trits = 10'h300;
+            8'd41: trits = 10'h301;
+            8'd42: trits = 10'h307;
+            8'd43: trits = 10'h304;
+            8'd44: trits = 10'h305;
+            8'd45: trits = 10'h31f;
+            8'd46: trits = 10'h31c;
+            8'd47: trits = 10'h31d;
+            8'd48: trits = 10'h313;
+            8'd49: trits = 10'h310;
+            8'd50: trits = 10'h311;
+            8'd51: trits = 10'h317;
+            8'd52: trits = 10'h314;
+            8'd53: trits = 10'h315;
+            8'd54: trits = 10'h37f;
+            8'd55: trits = 10'h37c;
+            8'd56: trits = 10'h37d;
+            8'd57: trits = 10'h373;
+            8'd58: trits = 10'h370;
+            8'd59: trits = 10'h371;
+            8'd60: trits = 10'h377;
+            8'd61: trits = 10'h374;
+            8'd62: trits = 10'h375;
+            8'd63: trits = 10'h34f;
+            8'd64: trits = 10'h34c;
+            8'd65: trits = 10'h34d;
+            8'd66: trits = 10'h343;
+            8'd67: trits = 10'h340;
+            8'd68: trits = 10'h341;
+            8'd69: trits = 10'h347;
+            8'd70: trits = 10'h344;
+            8'd71: trits = 10'h345;
+            8'd72: trits = 10'h35f;
+            8'd73: trits = 10'h35c;
+            8'd74: trits = 10'h35d;
+            8'd75: trits = 10'h353;
+            8'd76: trits = 10'h350;
+            8'd77: trits = 10'h351;
+            8'd78: trits = 10'h357;
+            8'd79: trits = 10'h354;
+            8'd80: trits = 10'h355;
+            8'd81: trits = 10'h0ff;
+            8'd82: trits = 10'h0fc;
+            8'd83: trits = 10'h0fd;
+            8'd84: trits = 10'h0f3;
+            8'd85: trits = 10'h0f0;
+            8'd86: trits = 10'h0f1;
+            8'd87: trits = 10'h0f7;
+            8'd88: trits = 10'h0f4;
+            8'd89: trits = 10'h0f5;
+            8'd90: trits = 10'h0cf;
+            8'd91: trits = 10'h0cc;
+            8'd92: trits = 10'h0cd;
+            8'd93: trits = 10'h0c3;
+            8'd94: trits = 10'h0c0;
+            8'd95: trits = 10'h0c1;
+            8'd96: trits = 10'h0c7;
+            8'd97: trits = 10'h0c4;
+            8'd98: trits = 10'h0c5;
+            8'd99: trits = 10'h0df;
+            8'd100: trits = 10'h0dc;
+            8'd101: trits = 10'h0dd;
+            8'd102: trits = 10'h0d3;
+            8'd103: trits = 10'h0d0;
+            8'd104: trits = 10'h0d1;
+            8'd105: trits = 10'h0d7;
+            8'd106: trits = 10'h0d4;
+            8'd107: trits = 10'h0d5;
+            8'd108: trits = 10'h03f;
+            8'd109: trits = 10'h03c;
+            8'd110: trits = 10'h03d;
+            8'd111: trits = 10'h033;
+            8'd112: trits = 10'h030;
+            8'd113: trits = 10'h031;
+            8'd114: trits = 10'h037;
+            8'd115: trits = 10'h034;
+            8'd116: trits = 10'h035;
+            8'd117: trits = 10'h00f;
+            8'd118: trits = 10'h00c;
+            8'd119: trits = 10'h00d;
+            8'd120: trits = 10'h003;
+            8'd121: trits = 10'h000;
+            8'd122: trits = 10'h001;
+            8'd123: trits = 10'h007;
+            8'd124: trits = 10'h004;
+            8'd125: trits = 10'h005;
+            8'd126: trits = 10'h01f;
+            8'd127: trits = 10'h01c;
+            8'd128: trits = 10'h01d;
+            8'd129: trits = 10'h013;
+            8'd130: trits = 10'h010;
+            8'd131: trits = 10'h011;
+            8'd132: trits = 10'h017;
+            8'd133: trits = 10'h014;
+            8'd134: trits = 10'h015;
+            8'd135: trits = 10'h07f;
+            8'd136: trits = 10'h07c;
+            8'd137: trits = 10'h07d;
+            8'd138: trits = 10'h073;
+            8'd139: trits = 10'h070;
+            8'd140: trits = 10'h071;
+            8'd141: trits = 10'h077;
+            8'd142: trits = 10'h074;
+            8'd143: trits = 10'h075;
+            8'd144: trits = 10'h04f;
+            8'd145: trits = 10'h04c;
+            8'd146: trits = 10'h04d;
+            8'd147: trits = 10'h043;
+            8'd148: trits = 10'h040;
+            8'd149: trits = 10'h041;
+            8'd150: trits = 10'h047;
+            8'd151: trits = 10'h044;
+            8'd152: trits = 10'h045;
+            8'd153: trits = 10'h05f;
+            8'd154: trits = 10'h05c;
+            8'd155: trits = 10'h05d;
+            8'd156: trits = 10'h053;
+            8'd157: trits = 10'h050;
+            8'd158: trits = 10'h051;
+            8'd159: trits = 10'h057;
+            8'd160: trits = 10'h054;
+            8'd161: trits = 10'h055;
+            8'd162: trits = 10'h1ff;
+            8'd163: trits = 10'h1fc;
+            8'd164: trits = 10'h1fd;
+            8'd165: trits = 10'h1f3;
+            8'd166: trits = 10'h1f0;
+            8'd167: trits = 10'h1f1;
+            8'd168: trits = 10'h1f7;
+            8'd169: trits = 10'h1f4;
+            8'd170: trits = 10'h1f5;
+            8'd171: trits = 10'h1cf;
+            8'd172: trits = 10'h1cc;
+            8'd173: trits = 10'h1cd;
+            8'd174: trits = 10'h1c3;
+            8'd175: trits = 10'h1c0;
+            8'd176: trits = 10'h1c1;
+            8'd177: trits = 10'h1c7;
+            8'd178: trits = 10'h1c4;
+            8'd179: trits = 10'h1c5;
+            8'd180: trits = 10'h1df;
+            8'd181: trits = 10'h1dc;
+            8'd182: trits = 10'h1dd;
+            8'd183: trits = 10'h1d3;
+            8'd184: trits = 10'h1d0;
+            8'd185: trits = 10'h1d1;
+            8'd186: trits = 10'h1d7;
+            8'd187: trits = 10'h1d4;
+            8'd188: trits = 10'h1d5;
+            8'd189: trits = 10'h13f;
+            8'd190: trits = 10'h13c;
+            8'd191: trits = 10'h13d;
+            8'd192: trits = 10'h133;
+            8'd193: trits = 10'h130;
+            8'd194: trits = 10'h131;
+            8'd195: trits = 10'h137;
+            8'd196: trits = 10'h134;
+            8'd197: trits = 10'h135;
+            8'd198: trits = 10'h10f;
+            8'd199: trits = 10'h10c;
+            8'd200: trits = 10'h10d;
+            8'd201: trits = 10'h103;
+            8'd202: trits = 10'h100;
+            8'd203: trits = 10'h101;
+            8'd204: trits = 10'h107;
+            8'd205: trits = 10'h104;
+            8'd206: trits = 10'h105;
+            8'd207: trits = 10'h11f;
+            8'd208: trits = 10'h11c;
+            8'd209: trits = 10'h11d;
+            8'd210: trits = 10'h113;
+            8'd211: trits = 10'h110;
+            8'd212: trits = 10'h111;
+            8'd213: trits = 10'h117;
+            8'd214: trits = 10'h114;
+            8'd215: trits = 10'h115;
+            8'd216: trits = 10'h17f;
+            8'd217: trits = 10'h17c;
+            8'd218: trits = 10'h17d;
+            8'd219: trits = 10'h173;
+            8'd220: trits = 10'h170;
+            8'd221: trits = 10'h171;
+            8'd222: trits = 10'h177;
+            8'd223: trits = 10'h174;
+            8'd224: trits = 10'h175;
+            8'd225: trits = 10'h14f;
+            8'd226: trits = 10'h14c;
+            8'd227: trits = 10'h14d;
+            8'd228: trits = 10'h143;
+            8'd229: trits = 10'h140;
+            8'd230: trits = 10'h141;
+            8'd231: trits = 10'h147;
+            8'd232: trits = 10'h144;
+            8'd233: trits = 10'h145;
+            8'd234: trits = 10'h15f;
+            8'd235: trits = 10'h15c;
+            8'd236: trits = 10'h15d;
+            8'd237: trits = 10'h153;
+            8'd238: trits = 10'h150;
+            8'd239: trits = 10'h151;
+            8'd240: trits = 10'h157;
+            8'd241: trits = 10'h154;
+            8'd242: trits = 10'h155;
+            default: trits = 10'h000;
+        endcase
     end
-
 endmodule
-
