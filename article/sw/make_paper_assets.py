@@ -167,13 +167,15 @@ TAG = {"ecg5000": "Ecg", "cue256": "CueA", "cue1024": "CueB", "win512": "Win"}
 def ablation_table():
     tasks = [t for t in TASK_ORDER if load(f"ablation_{t}.json")]
     data = {t: load(f"ablation_{t}.json") for t in tasks}
-    cell = lambda vals: f"${br(np.mean(vals), 1)} \\pm {br(np.std(vals), 1)}$"
+    pm = lambda vals: f"${br(np.mean(vals), 1)} \\pm {br(np.std(vals), 1)}$"
+    # recall is all-or-nothing per seed: report seeds solved (acc > 90%) instead of mean +- std
+    cell = lambda vals, t="": f"{sum(a > 90 for a in vals)}/{len(vals)}" if t.startswith("cue") else pm(vals)
     rows = []
     for name, label in ABL_LABEL.items():
         cs = []
         for t in tasks:
             c = data[t]["configs"].get(name)
-            cs.append(cell(c["acc"]) if c else "---")
+            cs.append(cell(c["acc"], t) if c else "---")
             if t == "ecg5000":
                 cs.append(cell(c["bal_acc"]) if c else "---")
         rows.append(label + " & " + " & ".join(cs) + " \\\\")
@@ -185,7 +187,7 @@ def ablation_table():
             cs = []
             for t in tasks:
                 c = data[t]["configs"].get(parent, {}).get("int_eval", {}).get(iname)
-                cs.append(cell(c["acc"]) if c else "---")
+                cs.append(cell(c["acc"], t) if c else "---")
                 if t == "ecg5000":
                     cs.append(cell(c["bal_acc"]) if c else "---")
             rows.append(INT_LABEL[iname] + " & " + " & ".join(cs) + " \\\\")
@@ -193,7 +195,7 @@ def ablation_table():
 
     head = {"ecg5000": "\\multicolumn{2}{c}{ECG5000 ($L=140$)}", "cue256": "Record. $L=256$",
             "cue1024": "Record. $L=1024$", "win512": "Janela $L=512$"}
-    sub = {"ecg5000": "Acur. & Acur. bal.", "cue256": "Acur.", "cue1024": "Acur.", "win512": "Acur."}
+    sub = {"ecg5000": "Acur. & Acur. bal.", "cue256": "Resolve", "cue1024": "Resolve", "win512": "Acur."}
     ncols = sum(2 if t == "ecg5000" else 1 for t in tasks)
     write("tab_ablation.tex",
           f"\\begin{{tabular}}{{llll{'c' * ncols}}}\n\\toprule\n"
@@ -243,15 +245,39 @@ SCAN_HW = {"scan_cpot_s32_g10_round": "CPoT, 32b + guarda (proposta)",
 def quartus_table():
     q = load("quartus_dse.json")
     by = {r["name"]: r for r in q["results"]}
+    pw = {r["name"]: r for r in (load("quartus_power.json") or {"results": []})["results"]}
+    for n in by:
+        by[n]["dyn_mw"] = pw.get(n, {}).get("core_dynamic_mw")
     rows = [f"{l} & {thousands(by[n]['alms'])} & {thousands(by[n]['registers'])} & {by[n]['dsp_blocks']} & "
-            f"{br(by[n]['fmax_mhz_slow100'], 1)} \\\\" for n, l in SCAN_HW.items()]
+            f"{br(by[n]['fmax_mhz_slow100'], 1)} & {br(by[n]['dyn_mw'], 1)} \\\\" for n, l in SCAN_HW.items()]
     write("tab_quartus.tex", "\n".join(rows) + "\n\\bottomrule\n")
     ver = q["tool"][1].split("Build")[0].replace("Version", "").strip()
     write("macros_quartus.tex", f"\\newcommand{{\\QuartusVersion}}{{Quartus Prime Lite {ver}}}\n")
     return by
 
 
-def number_macros(ver_tot, ver_mis, qby):
+def asic_table():
+    """Nangate45 OpenROAD results: fmax from the tightest run, area/power at the iso-frequency run."""
+    a = load("asic_nangate45.json")
+    if not a:
+        return {}
+    res = a["results"]
+    iso = max(r["period_ns"] for r in res)                      # every variant meets the slowest target
+    by = {}
+    for n in SCAN_HW:
+        rs = [r for r in res if r["name"] == n]
+        it = next(r for r in rs if r["period_ns"] == iso)
+        tight = min(rs, key=lambda r: r["period_ns"])
+        by[n] = dict(it, fmax_best=tight["fmax_mhz"], fmax_met=tight["wns_ns"] >= 0, iso_mhz=1000 / iso)
+    ge = lambda n: "$\\geq$" if by[n]["fmax_met"] else ""        # target met: fmax is only a lower bound
+    rows = [f"{l} & {thousands(round(by[n]['design_area_um2']))} & {ge(n)}{br(by[n]['fmax_best'], 0)} & "
+            f"{br(by[n]['power_total_w'] * 1e3, 1)} & {br(by[n]['energy_pj_per_cycle'], 1)} \\\\"
+            for n, l in SCAN_HW.items()]
+    write("tab_asic.tex", "\n".join(rows) + "\n\\bottomrule\n")
+    return by
+
+
+def number_macros(ver_tot, ver_mis, qby, aby):
     r = load("long_range_results.json")
     e1, e3, e4 = r["E1_grid_0.90_0.999"], r["E3_integer_impulse"], r["E4_integer_random_sqnr"]
     c, m_ = qby["scan_cpot_s32_g10_round"], qby["scan_mult_q15_s32_g10"]
@@ -271,7 +297,19 @@ def number_macros(ver_tot, ver_mis, qby):
         "FmaxCpot": br(c["fmax_mhz_slow100"], 1), "FmaxMult": br(m_["fmax_mhz_slow100"], 1),
         "DspSaving": br(100 * (1 - c["dsp_blocks"] / m_["dsp_blocks"]), 0) + "\\%",
         "LanesCpot": str(112 // c["dsp_blocks"]), "LanesMult": str(112 // m_["dsp_blocks"]),
+        "QPowCpot": br(c["dyn_mw"], 1), "QPowMult": br(m_["dyn_mw"], 1),
     }
+    if aby:
+        ac, am = aby["scan_cpot_s32_g10_round"], aby["scan_mult_q15_s32_g10"]
+        m.update({
+            "AsicAreaCpot": thousands(round(ac["design_area_um2"])), "AsicAreaMult": thousands(round(am["design_area_um2"])),
+            "AsicAreaSaving": br(100 * (1 - ac["design_area_um2"] / am["design_area_um2"]), 0) + "\\%",
+            "AsicFmaxCpot": br(ac["fmax_best"], 0), "AsicFmaxMult": br(am["fmax_best"], 0),
+            "AsicIsoMhz": br(ac["iso_mhz"], 0),
+            "AsicPowCpot": br(ac["power_total_w"] * 1e3, 1), "AsicPowMult": br(am["power_total_w"] * 1e3, 1),
+            "AsicEnergyCpot": br(ac["energy_pj_per_cycle"], 1), "AsicEnergyMult": br(am["energy_pj_per_cycle"], 1),
+            "AsicEnergySaving": br(100 * (1 - ac["energy_pj_per_cycle"] / am["energy_pj_per_cycle"]), 0) + "\\%",
+        })
     write("macros_numbers.tex", "".join(f"\\newcommand{{\\{k}}}{{{val}}}\n" for k, val in m.items()))
 
 
@@ -279,7 +317,7 @@ if __name__ == "__main__":
     tot, mis = verification_table()
     abar_table()
     long_range_figure()
-    number_macros(tot, mis, quartus_table())
+    number_macros(tot, mis, quartus_table(), asic_table())
     if any(load(f"ablation_{t}.json") for t in TASK_ORDER):
         ablation_table()
     else:   # placeholders so the paper still compiles; visibly marked as missing

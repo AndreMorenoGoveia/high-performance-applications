@@ -1,0 +1,411 @@
+{
+  "task": "cue256",
+  "seq_len": 256,
+  "n_train": 4000,
+  "n_test": 1000,
+  "n_classes": 4,
+  "epochs": 20,
+  "seeds": [
+    42,
+    100,
+    2026,
+    7,
+    31
+  ],
+  "model": {
+    "d_model": 64,
+    "n_heads": 4,
+    "d_state": 16,
+    "act_bits": 8
+  },
+  "configs": {
+    "S0_fp32": {
+      "cfg": {
+        "weight_mode": "fp32",
+        "use_fwht": false
+      },
+      "acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "bal_acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "zero_frac": [
+        0.25534459786821706,
+        0.25184714147286824,
+        0.25428476259689925,
+        0.25201368701550386,
+        0.2531189437984496
+      ],
+      "int_eval": {},
+      "summary": {
+        "total_params": 68636,
+        "projection_params": 66048,
+        "projection_ratio": 0.9622938399673641,
+        "ternary_zero_fraction": 0.2531189437984496,
+        "proj_kib_fp16": 129.0,
+        "proj_kib_int8": 64.5,
+        "proj_kib_2bit": 16.125,
+        "proj_kib_radix3": 12.900390625
+      },
+      "acc_mean": 100.0,
+      "acc_std": 0.0,
+      "bal_acc_mean": 100.0,
+      "bal_acc_std": 0.0,
+      "elapsed_s": 404.70122265815735
+    },
+    "S1_w8a8": {
+      "cfg": {
+        "weight_mode": "int8",
+        "use_fwht": false
+      },
+      "acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "bal_acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "zero_frac": [
+        0.25433018410852715,
+        0.25225593507751937,
+        0.2536942829457364,
+        0.2519985465116279,
+        0.2527404312015504
+      ],
+      "int_eval": {},
+      "summary": {
+        "total_params": 68636,
+        "projection_params": 66048,
+        "projection_ratio": 0.9622938399673641,
+        "ternary_zero_fraction": 0.2527404312015504,
+        "proj_kib_fp16": 129.0,
+        "proj_kib_int8": 64.5,
+        "proj_kib_2bit": 16.125,
+        "proj_kib_radix3": 12.900390625
+      },
+      "acc_mean": 100.0,
+      "acc_std": 0.0,
+      "bal_acc_mean": 100.0,
+      "bal_acc_std": 0.0,
+      "elapsed_s": 406.7867999076843
+    },
+    "S2_q15": {
+      "cfg": {
+        "weight_mode": "int8",
+        "hw_scan": true,
+        "abar_mode": "fixed16",
+        "use_fwht": false
+      },
+      "acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "bal_acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "zero_frac": [
+        0.2543604651162791,
+        0.2515594718992248,
+        0.25461785368217055,
+        0.2526798691860465,
+        0.252922117248062
+      ],
+      "int_eval": {
+        "int_mult_q15_s32": {
+          "acc": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "bal_acc": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "sat_events_last_batch": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "acc_mean": 100.0,
+          "acc_std": 0.0
+        }
+      },
+      "summary": {
+        "total_params": 68636,
+        "projection_params": 66048,
+        "projection_ratio": 0.9622938399673641,
+        "ternary_zero_fraction": 0.252922117248062,
+        "proj_kib_fp16": 129.0,
+        "proj_kib_int8": 64.5,
+        "proj_kib_2bit": 16.125,
+        "proj_kib_radix3": 12.900390625
+      },
+      "acc_mean": 100.0,
+      "acc_std": 0.0,
+      "bal_acc_mean": 100.0,
+      "bal_acc_std": 0.0,
+      "elapsed_s": 465.4670407772064
+    },
+    "S3_pot1": {
+      "cfg": {
+        "weight_mode": "int8",
+        "hw_scan": true,
+        "abar_mode": "pot",
+        "use_fwht": false
+      },
+      "acc": [
+        26.600000262260437,
+        24.60000067949295,
+        23.70000034570694,
+        24.500000476837158,
+        26.100000739097595
+      ],
+      "bal_acc": [
+        26.590877771377563,
+        24.57798458635807,
+        23.75541143119335,
+        24.521539360284805,
+        26.242567226290703
+      ],
+      "zero_frac": [
+        0.27428536821705424,
+        0.2766624273255814,
+        0.2687590843023256,
+        0.26768410852713176,
+        0.27208999515503873
+      ],
+      "int_eval": {},
+      "summary": {
+        "total_params": 68636,
+        "projection_params": 66048,
+        "projection_ratio": 0.9622938399673641,
+        "ternary_zero_fraction": 0.27208999515503873,
+        "proj_kib_fp16": 129.0,
+        "proj_kib_int8": 64.5,
+        "proj_kib_2bit": 16.125,
+        "proj_kib_radix3": 12.900390625
+      },
+      "acc_mean": 25.100000500679016,
+      "acc_std": 1.0788883209396327,
+      "bal_acc_mean": 25.1376760751009,
+      "bal_acc_std": 1.089597557426713,
+      "elapsed_s": 481.5254487991333
+    },
+    "S4_pot0": {
+      "cfg": {
+        "weight_mode": "int8",
+        "hw_scan": true,
+        "abar_mode": "pot0",
+        "use_fwht": false
+      },
+      "acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "bal_acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "zero_frac": [
+        0.2532249273255814,
+        0.2505299176356589,
+        0.2549358042635659,
+        0.252937257751938,
+        0.2510295542635659
+      ],
+      "int_eval": {},
+      "summary": {
+        "total_params": 68636,
+        "projection_params": 66048,
+        "projection_ratio": 0.9622938399673641,
+        "ternary_zero_fraction": 0.2510295542635659,
+        "proj_kib_fp16": 129.0,
+        "proj_kib_int8": 64.5,
+        "proj_kib_2bit": 16.125,
+        "proj_kib_radix3": 12.900390625
+      },
+      "acc_mean": 100.0,
+      "acc_std": 0.0,
+      "bal_acc_mean": 100.0,
+      "bal_acc_std": 0.0,
+      "elapsed_s": 476.2382547855377
+    },
+    "S5_cpot": {
+      "cfg": {
+        "weight_mode": "int8",
+        "hw_scan": true,
+        "abar_mode": "cpot",
+        "use_fwht": false
+      },
+      "acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "bal_acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "zero_frac": [
+        0.255359738372093,
+        0.25177143895348836,
+        0.25420906007751937,
+        0.25452701065891475,
+        0.25213481104651164
+      ],
+      "int_eval": {
+        "int_cpot_s32_g10_round": {
+          "acc": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "bal_acc": [
+            100.0,
+            100.0,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "sat_events_last_batch": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "acc_mean": 100.0,
+          "acc_std": 0.0
+        },
+        "int_cpot_s16_g0_trunc": {
+          "acc": [
+            100.0,
+            62.09999918937683,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "bal_acc": [
+            100.0,
+            63.478535413742065,
+            100.0,
+            100.0,
+            100.0
+          ],
+          "sat_events_last_batch": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "acc_mean": 92.41999983787537,
+          "acc_std": 15.160000324249266
+        }
+      },
+      "summary": {
+        "total_params": 68636,
+        "projection_params": 66048,
+        "projection_ratio": 0.9622938399673641,
+        "ternary_zero_fraction": 0.25213481104651164,
+        "proj_kib_fp16": 129.0,
+        "proj_kib_int8": 64.5,
+        "proj_kib_2bit": 16.125,
+        "proj_kib_radix3": 12.900390625
+      },
+      "acc_mean": 100.0,
+      "acc_std": 0.0,
+      "bal_acc_mean": 100.0,
+      "bal_acc_std": 0.0,
+      "elapsed_s": 499.17172837257385
+    },
+    "S6_cpot2": {
+      "cfg": {
+        "weight_mode": "int8",
+        "hw_scan": true,
+        "abar_mode": "cpot2",
+        "use_fwht": false
+      },
+      "acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "bal_acc": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+      ],
+      "zero_frac": [
+        0.25613190406976744,
+        0.2510144137596899,
+        0.2538608284883721,
+        0.25177143895348836,
+        0.25271015019379844
+      ],
+      "int_eval": {},
+      "summary": {
+        "total_params": 68636,
+        "projection_params": 66048,
+        "projection_ratio": 0.9622938399673641,
+        "ternary_zero_fraction": 0.25271015019379844,
+        "proj_kib_fp16": 129.0,
+        "proj_kib_int8": 64.5,
+        "proj_kib_2bit": 16.125,
+        "proj_kib_radix3": 12.900390625
+      },
+      "acc_mean": 100.0,
+      "acc_std": 0.0,
+      "bal_acc_mean": 100.0,
+      "bal_acc_std": 0.0,
+      "elapsed_s": 473.2356929779053
+    }
+  }
+}

@@ -1,0 +1,12 @@
+read_verilog -defer /home/andre/repos/high-performance-applications/article/hw/rtl/scan_lane.v /home/andre/repos/high-performance-applications/article/hw/rtl/adder_tree.v
+chparam -set N 16 -set STATE_W 32 -set GUARD 10 -set ROUND 1 -set DECAY 1 scan_lane
+synth -flatten -top scan_lane
+dfflibmap -liberty /home/andre/opt/pdk/orfs/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib
+abc -D 2500 -liberty /home/andre/opt/pdk/orfs/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib -dont_use AOI211_X1 -dont_use OAI211_X1
+opt_clean -purge
+hilomap -singleton -hicell LOGIC1_X1 Z -locell LOGIC0_X1 Z
+setundef -zero
+splitnets -ports
+opt_clean -purge
+stat -liberty /home/andre/opt/pdk/orfs/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib
+write_verilog -noattr -noexpr -nohex -nodec /home/andre/repos/high-performance-applications/article/hw/asic/build/scan_mult_q15_s32_g10_T2.5/netlist.v

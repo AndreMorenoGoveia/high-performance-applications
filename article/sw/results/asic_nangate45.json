@@ -1,0 +1,139 @@
+{
+  "pdk": "Nangate45 (FreePDK45), typical corner",
+  "flow": "Yosys + OpenROAD, global-route parasitics",
+  "input_activity": 0.125,
+  "results": [
+    {
+      "synth_area_um2": 64138.984,
+      "design_area_um2": 73175.0,
+      "utilization": 0.51,
+      "wns_ns": -0.7727889658039087,
+      "tns_ns": -354.8240486304344,
+      "power_internal_w": 0.0146,
+      "power_switching_w": 0.0126,
+      "power_leakage_w": 0.00174,
+      "power_total_w": 0.0289,
+      "name": "scan_cpot_s32_g10_round",
+      "params": {
+        "N": 16,
+        "STATE_W": 32,
+        "GUARD": 10,
+        "ROUND": 1,
+        "DECAY": 0
+      },
+      "period_ns": 2.5,
+      "fmax_mhz": 305.5497957395386,
+      "energy_pj_per_cycle": 72.25
+    },
+    {
+      "synth_area_um2": 37416.092,
+      "design_area_um2": 41801.0,
+      "utilization": 0.51,
+      "wns_ns": 0.0,
+      "tns_ns": 0.0,
+      "power_internal_w": 0.00911,
+      "power_switching_w": 0.00748,
+      "power_leakage_w": 0.00097,
+      "power_total_w": 0.0176,
+      "name": "scan_cpot_s16_g0_trunc",
+      "params": {
+        "N": 16,
+        "STATE_W": 16,
+        "GUARD": 0,
+        "ROUND": 0,
+        "DECAY": 0
+      },
+      "period_ns": 2.5,
+      "fmax_mhz": 400.0,
+      "energy_pj_per_cycle": 44.00000000000001
+    },
+    {
+      "synth_area_um2": 109145.918,
+      "design_area_um2": 128228.0,
+      "utilization": 0.53,
+      "wns_ns": -0.23316504942324467,
+      "tns_ns": -97.44482829789816,
+      "power_internal_w": 0.0183,
+      "power_switching_w": 0.0184,
+      "power_leakage_w": 0.00316,
+      "power_total_w": 0.0399,
+      "name": "scan_mult_q15_s32_g10",
+      "params": {
+        "N": 16,
+        "STATE_W": 32,
+        "GUARD": 10,
+        "ROUND": 1,
+        "DECAY": 1
+      },
+      "period_ns": 2.5,
+      "fmax_mhz": 365.8761845396132,
+      "energy_pj_per_cycle": 99.74999999999999
+    },
+    {
+      "synth_area_um2": 64138.984,
+      "design_area_um2": 72337.0,
+      "utilization": 0.51,
+      "wns_ns": 0.0,
+      "tns_ns": 0.0,
+      "power_internal_w": 0.00899,
+      "power_switching_w": 0.00776,
+      "power_leakage_w": 0.00171,
+      "power_total_w": 0.0185,
+      "name": "scan_cpot_s32_g10_round",
+      "params": {
+        "N": 16,
+        "STATE_W": 32,
+        "GUARD": 10,
+        "ROUND": 1,
+        "DECAY": 0
+      },
+      "period_ns": 4.0,
+      "fmax_mhz": 250.0,
+      "energy_pj_per_cycle": 74.0
+    },
+    {
+      "synth_area_um2": 37416.092,
+      "design_area_um2": 41801.0,
+      "utilization": 0.51,
+      "wns_ns": 0.0,
+      "tns_ns": 0.0,
+      "power_internal_w": 0.0057,
+      "power_switching_w": 0.00468,
+      "power_leakage_w": 0.00097,
+      "power_total_w": 0.0113,
+      "name": "scan_cpot_s16_g0_trunc",
+      "params": {
+        "N": 16,
+        "STATE_W": 16,
+        "GUARD": 0,
+        "ROUND": 0,
+        "DECAY": 0
+      },
+      "period_ns": 4.0,
+      "fmax_mhz": 250.0,
+      "energy_pj_per_cycle": 45.199999999999996
+    },
+    {
+      "synth_area_um2": 109145.918,
+      "design_area_um2": 126896.0,
+      "utilization": 0.52,
+      "wns_ns": 0.0,
+      "tns_ns": 0.0,
+      "power_internal_w": 0.0112,
+      "power_switching_w": 0.0113,
+      "power_leakage_w": 0.00311,
+      "power_total_w": 0.0257,
+      "name": "scan_mult_q15_s32_g10",
+      "params": {
+        "N": 16,
+        "STATE_W": 32,
+        "GUARD": 10,
+        "ROUND": 1,
+        "DECAY": 1
+      },
+      "period_ns": 4.0,
+      "fmax_mhz": 250.0,
+      "energy_pj_per_cycle": 102.8
+    }
+  ]
+}

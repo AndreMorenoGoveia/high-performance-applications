@@ -1,5 +1,11 @@
 \begin{thebibliography}{10}
 
+\bibitem{abreu2024qs5}
+Steven Abreu, Jens~E. Pedersen, Kade~M. Heckel, and Alessandro Pierro.
+\newblock {Q-S5}: Towards quantized state space models.
+\newblock In {\em ICML Workshop on Next Generation of Sequence Modeling
+  Architectures}, 2024.
+
 \bibitem{ecg5000}
 Yanping Chen, Eamonn Keogh, Bing Hu, Nurjahan Begum, Anthony Bagnall, Abdullah
   Mueen, and Gustavo Batista.
@@ -22,12 +28,24 @@ Hung-Yueh Chiang, Chi-Chih Chang, and Diana Marculescu.
 \newblock In {\em International Conference on Machine Learning (ICML)}, 2025.
 \newblock arXiv:2503.22879.
 
+\bibitem{cho2025ptq4vm}
+Younghyun Cho, Changhun Lee, Seonggon Kim, and Eunhyeok Park.
+\newblock {PTQ4VM}: Post-training quantization for visual {Mamba}.
+\newblock In {\em IEEE/CVF Winter Conference on Applications of Computer Vision
+  (WACV)}, 2025.
+
 \bibitem{dao2024transformers}
 Tri Dao and Albert Gu.
 \newblock Transformers are {SSMs}: Generalized models and efficient algorithms
   through structured state space duality.
 \newblock In {\em International Conference on Machine Learning (ICML)}, 2024.
 \newblock arXiv:2405.21060.
+
+\bibitem{fuketa2026fqmamba2}
+Hiroshi Fuketa and Masakazu Hioki.
+\newblock Hardware-friendly fully quantized {Mamba-2} model and its
+  {FPGA}-based accelerator.
+\newblock {\em IEEE Access}, 2026.
 
 \bibitem{ganesaraja2026ternarymamba}
 Ramprasath Ganesaraja, Sahil~Dilip Panse, and Swathika N.
@@ -41,16 +59,66 @@ Albert Gu and Tri Dao.
 \newblock In {\em First Conference on Language Modeling (COLM)}, 2024.
 \newblock arXiv:2312.00752.
 
+\bibitem{haller2026pace}
+Patrick Haller, Filipe Laitenberger, and Alan Akbik.
+\newblock {PACE}: Periodic and channel-aligned encoding of four-bit recurrent
+  states.
+\newblock {\em arXiv preprint arXiv:2610.29545}, 2026.
+
 \bibitem{intel_cyclone5_handbook}
 Intel Corporation (Altera).
 \newblock {\em {Cyclone V} Device Handbook: Volume 1 -- Device Interfaces and
   Integration}, 2023.
+
+\bibitem{kim2026ssdi8}
+Hyunwoo Kim, Byoungchan Ko, Minseok Kang, Minwoo Kim, Dongjin Lee, Jaehoon Lee,
+  Sungroh Yoon, and Dahuin Jung.
+\newblock {SSDi8}: Accurate and efficient 8-bit quantization for state space
+  duality.
+\newblock {\em arXiv preprint arXiv:2608.21952}, 2026.
+
+\bibitem{kim2025emamba}
+Jiyong Kim, Jaeho Lee, Jiahao Lin, Alish Kanani, Miao Sun, Umit~Y. Ogras, and
+  Jaehyun Park.
+\newblock {eMamba}: Efficient acceleration framework for mamba models in edge
+  computing.
+\newblock {\em ACM Transactions on Embedded Computing Systems}, 2025.
 
 \bibitem{li2024marca}
 Jinhao Li, Shan Huang, Jiaming Xu, Jun Liu, Li~Ding, Ningyi Xu, and Guohao Dai.
 \newblock {MARCA}: {Mamba} accelerator with {ReConfigurable} architecture.
 \newblock In {\em IEEE/ACM International Conference on Computer-Aided Design
   (ICCAD)}, 2024.
+
+\bibitem{li2025qmamba}
+Yinglong Li, Xiaoyu Liu, Jiacheng Li, Ruikang Xu, Yinda Chen, and Zhiwei Xiong.
+\newblock {QMamba}: Post-training quantization for vision state space models.
+\newblock {\em arXiv preprint arXiv:2501.13624}, 2025.
+
+\bibitem{liou2026replayssm}
+Ze-Wei Liou, Harris Nover, Amey Naik, Andrii Skliar, Igor Shovkun, Ido Shahaf,
+  and Tri Dao.
+\newblock {ReplaySSM}: Cache {SSM} inputs, not state.
+\newblock {\em arXiv preprint arXiv:2610.13778}, 2026.
+
+\bibitem{liu2026hfrwkv}
+Shijie Liu, Zhenghao Zeng, Han Jiao, and Yihua Huang.
+\newblock {HFRWKV}: A high-performance fully on-chip hardware accelerator for
+  {RWKV}.
+\newblock {\em arXiv preprint arXiv:2601.02135}, 2026.
+
+\bibitem{lyu2026vimq}
+Shengzhe Lyu, Yuhan She, Patrick S.~Y. Hung, Ray C.~C. Cheung, and Weitao Xu.
+\newblock {ViM-Q}: Scalable algorithm-hardware co-design for vision mamba model
+  inference on {FPGA}.
+\newblock In {\em IEEE Symposium on Field-Programmable Custom Computing
+  Machines (FCCM)}, 2026.
+\newblock arXiv:2605.01935.
+
+\bibitem{oppenheim2010dtsp}
+Alan~V. Oppenheim and Ronald~W. Schafer.
+\newblock {\em Discrete-Time Signal Processing}.
+\newblock Pearson, 3 edition, 2010.
 
 \bibitem{tang2024bimamba}
 Shengkun Tang, Liqun Ma, Haonan Li, Mingjie Sun, and Zhiqiang Shen.
@@ -71,6 +139,12 @@ Renjie Wei, Songqiang Xu, Linfeng Zhong, Zebin Yang, Qingyu Guo, Yuan Wang,
   quantization and hardware co-design.
 \newblock In {\em Design, Automation and Test in Europe (DATE)}, 2025.
 \newblock arXiv:2502.15260.
+
+\bibitem{yoon2025mambax}
+Dongho Yoon, Gungyu Lee, Jaewon Chang, Yunjae Lee, Dongjae Lee, and Minsoo Rhu.
+\newblock {Mamba-X}: An end-to-end vision mamba accelerator for edge computing
+  devices.
+\newblock {\em arXiv preprint arXiv:2508.02977}, 2025.
 
 \bibitem{yu2025slendermamba}
 Zhenxuan Yu, Takeshi Kojima, Yutaka Matsuo, and Yusuke Iwasawa.

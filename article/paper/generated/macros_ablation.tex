@@ -1,18 +1,99 @@
-\newcommand{\NParams}{\textbf{??}}
-\newcommand{\SeedsEcg}{\textbf{??}}
-\newcommand{\SeedsCueA}{\textbf{??}}
-\newcommand{\SeedsCueB}{\textbf{??}}
-\newcommand{\SeedsWin}{\textbf{??}}
-\newcommand{\EpochsEcg}{\textbf{??}}
-\newcommand{\EpochsCueA}{\textbf{??}}
-\newcommand{\EpochsCueB}{\textbf{??}}
-\newcommand{\EpochsWin}{\textbf{??}}
-\newcommand{\TrainEcg}{\textbf{??}}
-\newcommand{\TrainCueA}{\textbf{??}}
-\newcommand{\TrainCueB}{\textbf{??}}
-\newcommand{\TrainWin}{\textbf{??}}
-\newcommand{\TestEcg}{\textbf{??}}
-\newcommand{\TestCueA}{\textbf{??}}
-\newcommand{\TestCueB}{\textbf{??}}
-\newcommand{\TestWin}{\textbf{??}}
-\providecommand{\acc}[2]{\textbf{??}}\providecommand{\solved}[2]{\textbf{??}}
+\newcommand{\NParams}{68.253}
+\newcommand{\SeedsEcg}{5}
+\newcommand{\EpochsEcg}{40}
+\newcommand{\TrainEcg}{500}
+\newcommand{\TestEcg}{4.500}
+\newcommand{\SeedsCueA}{5}
+\newcommand{\EpochsCueA}{20}
+\newcommand{\TrainCueA}{4.000}
+\newcommand{\TestCueA}{1.000}
+\newcommand{\SeedsCueB}{3}
+\newcommand{\EpochsCueB}{20}
+\newcommand{\TrainCueB}{2.000}
+\newcommand{\TestCueB}{500}
+\newcommand{\SeedsWin}{5}
+\newcommand{\EpochsWin}{20}
+\newcommand{\TrainWin}{4.000}
+\newcommand{\TestWin}{1.000}
+\providecommand{\acc}[2]{\csname acc@#1@#2\endcsname}
+\providecommand{\solved}[2]{\csname solved@#1@#2\endcsname}
+\expandafter\def\csname acc@ecg@S0\endcsname{92{,}7}
+\expandafter\def\csname solved@ecg@S0\endcsname{5/5}
+\expandafter\def\csname acc@ecg@S1\endcsname{92{,}7}
+\expandafter\def\csname solved@ecg@S1\endcsname{5/5}
+\expandafter\def\csname acc@ecg@S2\endcsname{92{,}8}
+\expandafter\def\csname solved@ecg@S2\endcsname{5/5}
+\expandafter\def\csname acc@ecg@S2multq15\endcsname{92{,}8}
+\expandafter\def\csname solved@ecg@S2multq15\endcsname{5/5}
+\expandafter\def\csname acc@ecg@S3\endcsname{91{,}2}
+\expandafter\def\csname solved@ecg@S3\endcsname{5/5}
+\expandafter\def\csname acc@ecg@S4\endcsname{92{,}4}
+\expandafter\def\csname solved@ecg@S4\endcsname{5/5}
+\expandafter\def\csname acc@ecg@S5\endcsname{92{,}7}
+\expandafter\def\csname solved@ecg@S5\endcsname{5/5}
+\expandafter\def\csname acc@ecg@S5cpots32\endcsname{92{,}7}
+\expandafter\def\csname solved@ecg@S5cpots32\endcsname{5/5}
+\expandafter\def\csname acc@ecg@S5cpots16\endcsname{92{,}6}
+\expandafter\def\csname solved@ecg@S5cpots16\endcsname{5/5}
+\expandafter\def\csname acc@ecg@S6\endcsname{92{,}6}
+\expandafter\def\csname solved@ecg@S6\endcsname{5/5}
+\expandafter\def\csname acc@cueA@S0\endcsname{100{,}0}
+\expandafter\def\csname solved@cueA@S0\endcsname{5/5}
+\expandafter\def\csname acc@cueA@S1\endcsname{100{,}0}
+\expandafter\def\csname solved@cueA@S1\endcsname{5/5}
+\expandafter\def\csname acc@cueA@S2\endcsname{100{,}0}
+\expandafter\def\csname solved@cueA@S2\endcsname{5/5}
+\expandafter\def\csname acc@cueA@S2multq15\endcsname{100{,}0}
+\expandafter\def\csname solved@cueA@S2multq15\endcsname{5/5}
+\expandafter\def\csname acc@cueA@S3\endcsname{25{,}1}
+\expandafter\def\csname solved@cueA@S3\endcsname{0/5}
+\expandafter\def\csname acc@cueA@S4\endcsname{100{,}0}
+\expandafter\def\csname solved@cueA@S4\endcsname{5/5}
+\expandafter\def\csname acc@cueA@S5\endcsname{100{,}0}
+\expandafter\def\csname solved@cueA@S5\endcsname{5/5}
+\expandafter\def\csname acc@cueA@S5cpots32\endcsname{100{,}0}
+\expandafter\def\csname solved@cueA@S5cpots32\endcsname{5/5}
+\expandafter\def\csname acc@cueA@S5cpots16\endcsname{92{,}4}
+\expandafter\def\csname solved@cueA@S5cpots16\endcsname{4/5}
+\expandafter\def\csname acc@cueA@S6\endcsname{100{,}0}
+\expandafter\def\csname solved@cueA@S6\endcsname{5/5}
+\expandafter\def\csname acc@cueB@S0\endcsname{92{,}6}
+\expandafter\def\csname solved@cueB@S0\endcsname{9/10}
+\expandafter\def\csname acc@cueB@S1\endcsname{92{,}7}
+\expandafter\def\csname solved@cueB@S1\endcsname{9/10}
+\expandafter\def\csname acc@cueB@S2\endcsname{82{,}2}
+\expandafter\def\csname solved@cueB@S2\endcsname{7/10}
+\expandafter\def\csname acc@cueB@S2multq15\endcsname{82{,}2}
+\expandafter\def\csname solved@cueB@S2multq15\endcsname{7/10}
+\expandafter\def\csname acc@cueB@S3\endcsname{24{,}2}
+\expandafter\def\csname solved@cueB@S3\endcsname{0/3}
+\expandafter\def\csname acc@cueB@S4\endcsname{100{,}0}
+\expandafter\def\csname solved@cueB@S4\endcsname{10/10}
+\expandafter\def\csname acc@cueB@S5\endcsname{77{,}5}
+\expandafter\def\csname solved@cueB@S5\endcsname{7/10}
+\expandafter\def\csname acc@cueB@S5cpots32\endcsname{77{,}5}
+\expandafter\def\csname solved@cueB@S5cpots32\endcsname{7/10}
+\expandafter\def\csname acc@cueB@S5cpots16\endcsname{45{,}4}
+\expandafter\def\csname solved@cueB@S5cpots16\endcsname{0/10}
+\expandafter\def\csname acc@cueB@S6\endcsname{100{,}0}
+\expandafter\def\csname solved@cueB@S6\endcsname{3/3}
+\expandafter\def\csname acc@win@S0\endcsname{91{,}7}
+\expandafter\def\csname solved@win@S0\endcsname{5/5}
+\expandafter\def\csname acc@win@S1\endcsname{91{,}8}
+\expandafter\def\csname solved@win@S1\endcsname{5/5}
+\expandafter\def\csname acc@win@S2\endcsname{90{,}4}
+\expandafter\def\csname solved@win@S2\endcsname{6/10}
+\expandafter\def\csname acc@win@S2multq15\endcsname{90{,}5}
+\expandafter\def\csname solved@win@S2multq15\endcsname{6/10}
+\expandafter\def\csname acc@win@S3\endcsname{60{,}6}
+\expandafter\def\csname solved@win@S3\endcsname{0/5}
+\expandafter\def\csname acc@win@S4\endcsname{83{,}0}
+\expandafter\def\csname solved@win@S4\endcsname{0/10}
+\expandafter\def\csname acc@win@S5\endcsname{89{,}9}
+\expandafter\def\csname solved@win@S5\endcsname{7/10}
+\expandafter\def\csname acc@win@S5cpots32\endcsname{89{,}9}
+\expandafter\def\csname solved@win@S5cpots32\endcsname{7/10}
+\expandafter\def\csname acc@win@S5cpots16\endcsname{83{,}4}
+\expandafter\def\csname solved@win@S5cpots16\endcsname{0/10}
+\expandafter\def\csname acc@win@S6\endcsname{90{,}2}
+\expandafter\def\csname solved@win@S6\endcsname{4/5}

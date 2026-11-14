@@ -11,11 +11,16 @@
 | Experimentos E1–E4 (quantização de Ā, estado 16 b × 32 b) | `sw/long_range_experiment.py` | `long_range_results.json` |
 | Ablação S0–S6 (projeções W8A8 fixas, só o *scan* muda): ECG5000, recordação L=256/1024, maioria em janela L=512 | `sw/train_ablation.py` | `ablation_*.json` |
 | Síntese completa no Quartus Prime Lite 25.1 (ALMs, DSP, Fmax a 100 °C) | `sw/synth_quartus.py` | `quartus_dse.json` |
+| Potência Quartus a 50 MHz (vectorless) | `sw/quartus_power.py` | `quartus_power.json` |
+| Fluxo ASIC Yosys + OpenROAD, Nangate45 (área, Fmax, potência a 250 MHz) | `sw/asic_flow.py 2.5 4.0` | `asic_nangate45.json` |
+| Sementes extras (10 no total) na janela e em L=1024 | `sw/train_ablation.py --seed-list ... --tag _extra` + `sw/merge_seeds.py` | `ablation_*.json` |
+| Revisão de novidade, fase 2 (OpenAlex + snowballing) | — | `REVISAO_NOVIDADE.md` §7 |
 
 ## Pendente
-1. Opcional, para fortalecer: síntese ASIC com fluxo aberto (Yosys + OpenROAD, PDK Nangate45/ASAP7) para área e energia da *lane* CPoT × multiplicador.
-2. Opcional: dividir o laço de 1 ciclo intercalando canais (Fmax hoje ≈ 65–70 MHz nas duas variantes).
-3. **Placa DE10-Nano: não é necessária** neste escopo.
+1. Conferir no PDF (IEEE Access) como Fuketa & Hioki 2026 aplicam o decaimento (o texto completo não pôde ser lido automaticamente).
+2. Opcional: potência com atividade de simulação (VCD) e roteamento detalhado no fluxo ASIC.
+3. Opcional: dividir o laço de 1 ciclo intercalando canais (Fmax hoje ≈ 65–70 MHz nas duas variantes).
+4. **Placa DE10-Nano: não é necessária** neste escopo.
 
 ## Como reproduzir
 ```bash

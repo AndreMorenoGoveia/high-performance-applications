@@ -1,0 +1,47 @@
+{
+  "tool": "Quartus Prime Lite 25.1std Power Analyzer (vectorless)",
+  "results": [
+    {
+      "name": "scan_cpot_s32_g10_round",
+      "clock_mhz": 50,
+      "toggle_rate": 0.125,
+      "total_mw": 483.28,
+      "core_dynamic_mw": 62.3,
+      "core_static_mw": 412.71,
+      "dynamic_by_block_mw": {
+        "DSP block": 18.08,
+        "Combinational cell": 34.05,
+        "Register cell": 4.08
+      },
+      "confidence": "Low: user provided insufficient toggle rate data"
+    },
+    {
+      "name": "scan_cpot_s16_g0_trunc",
+      "clock_mhz": 50,
+      "toggle_rate": 0.125,
+      "total_mw": 435.93,
+      "core_dynamic_mw": 15.35,
+      "core_static_mw": 412.31,
+      "dynamic_by_block_mw": {
+        "DSP block": 7.26,
+        "Combinational cell": 3.17,
+        "Register cell": 2.41
+      },
+      "confidence": "Low: user provided insufficient toggle rate data"
+    },
+    {
+      "name": "scan_mult_q15_s32_g10",
+      "clock_mhz": 50,
+      "toggle_rate": 0.125,
+      "total_mw": 450.28,
+      "core_dynamic_mw": 29.58,
+      "core_static_mw": 412.43,
+      "dynamic_by_block_mw": {
+        "DSP block": 14.73,
+        "Combinational cell": 4.18,
+        "Register cell": 3.29
+      },
+      "confidence": "Low: user provided insufficient toggle rate data"
+    }
+  ]
+}

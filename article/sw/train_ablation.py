@@ -155,7 +155,7 @@ def train_one(cfg, train_ds, test_ds, in_dim, n_cls, seed, epochs, batch, dev):
     return model
 
 
-def run_task(task, seeds, dev):
+def run_task(task, seeds, dev, tag=""):
     spec = TASKS[task]
     train_ds, test_ds, in_dim, n_cls = spec["load"]()
     test_l = DataLoader(test_ds, batch_size=256)
@@ -195,7 +195,7 @@ def run_task(task, seeds, dev):
               f"bal {rec['bal_acc_mean']:6.2f} | zeros {np.mean(rec['zero_frac'])*100:4.1f}% "
               f"| {ints} ({rec['elapsed_s']:.0f}s)", flush=True)
     os.makedirs(os.path.join(HERE, "results"), exist_ok=True)
-    with open(os.path.join(HERE, "results", f"ablation_{task}.json"), "w") as f:
+    with open(os.path.join(HERE, "results", f"ablation_{task}{tag}.json"), "w") as f:
         json.dump(out, f, indent=2)
 
 
@@ -204,9 +204,11 @@ if __name__ == "__main__":
     ap.add_argument("--tasks", nargs="+", default=list(TASKS))
     ap.add_argument("--seeds", type=int, default=None, help="override per-task seed count")
     ap.add_argument("--configs", nargs="+", default=None)
+    ap.add_argument("--seed-list", nargs="+", type=int, default=None, help="explicit seeds (extra runs)")
+    ap.add_argument("--tag", default="", help="output suffix, e.g. _extra (merge with merge_seeds.py)")
     a = ap.parse_args()
     if a.configs:
         CONFIGS = {k: v for k, v in CONFIGS.items() if k in a.configs}
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     for t in a.tasks:
-        run_task(t, [42, 100, 2026, 7, 31][: a.seeds or TASKS[t]["seeds"]], dev)
+        run_task(t, a.seed_list or [42, 100, 2026, 7, 31][: a.seeds or TASKS[t]["seeds"]], dev, a.tag)

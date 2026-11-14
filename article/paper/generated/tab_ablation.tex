@@ -1,4 +1,18 @@
-\begin{tabular}{c}\toprule
-\textbf{resultados pendentes} \\
+\begin{tabular}{llllccccc}
+\toprule
+ & & & & \multicolumn{2}{c}{ECG5000 ($L=140$)} & Record. $L=256$ & Record. $L=1024$ & Janela $L=512$ \\
+ID & Configuração & Projeções & $\bar{A}_t$ & Acur. & Acur. bal. & Resolve & Resolve & Acur. \\
+\midrule
+S0 & FP32 (referência) & FP32 & float exato & $92{,}7 \pm 0{,}3$ & $52{,}0 \pm 0{,}6$ & 5/5 & 9/10 & $91{,}7 \pm 1{,}0$ \\
+S1 & W8A8, \emph{scan} ideal & INT8 & float exato & $92{,}7 \pm 0{,}3$ & $53{,}0 \pm 1{,}0$ & 5/5 & 9/10 & $91{,}8 \pm 1{,}0$ \\
+S2 & \emph{scan} HW & INT8 & Q1.15 (mult.) & $92{,}8 \pm 0{,}4$ & $53{,}3 \pm 1{,}1$ & 5/5 & 7/10 & $90{,}4 \pm 0{,}7$ \\
+S3 & \emph{scan} HW & INT8 & PoT, $k\geq1$ & $91{,}2 \pm 0{,}2$ & $50{,}1 \pm 0{,}8$ & 0/5 & 0/3 & $60{,}6 \pm 1{,}6$ \\
+S4 & \emph{scan} HW & INT8 & PoT, $k\geq0$ & $92{,}4 \pm 0{,}3$ & $52{,}1 \pm 0{,}8$ & 5/5 & 10/10 & $83{,}0 \pm 2{,}9$ \\
+\textbf{S5} & \textbf{\emph{scan} HW} & INT8 & \textbf{CPoT} & $92{,}7 \pm 0{,}4$ & $52{,}9 \pm 0{,}8$ & 5/5 & 7/10 & $89{,}9 \pm 1{,}0$ \\
+S6 & \emph{scan} HW & INT8 & CPoT-2 (só SW) & $92{,}6 \pm 0{,}2$ & $52{,}2 \pm 1{,}0$ & 5/5 & 3/3 & $90{,}2 \pm 1{,}6$ \\
+\midrule
+S2$^\dagger$ & \multicolumn{2}{l}{S2 com \emph{scan} inteiro bit-exato} & Q1.15, 32b & $92{,}8 \pm 0{,}4$ & $53{,}3 \pm 1{,}1$ & 5/5 & 7/10 & $90{,}5 \pm 0{,}7$ \\
+\textbf{S5$^\dagger$} & \multicolumn{2}{l}{\textbf{S5 com \emph{scan} inteiro bit-exato}} & \textbf{CPoT, 32b} & $92{,}7 \pm 0{,}4$ & $52{,}9 \pm 0{,}8$ & 5/5 & 7/10 & $89{,}9 \pm 0{,}9$ \\
+S5$^\ddagger$ & \multicolumn{2}{l}{S5 com estado legado (16b, trunc.)} & CPoT, 16b & $92{,}6 \pm 0{,}5$ & $52{,}5 \pm 0{,}3$ & 4/5 & 0/10 & $83{,}4 \pm 3{,}1$ \\
 \bottomrule
 \end{tabular}
